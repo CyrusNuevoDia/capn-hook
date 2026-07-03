@@ -77,6 +77,8 @@ Same as A, plus the Stop hook blocks completion once per session asking the agen
 - Prune triggers: SessionStart (before injection), `captain prune` manually, and opt-in git post-commit hook (C3)
 - Recall: prune + full-map dump into context at SessionStart (per-prompt matching deferred; see B)
 
+Implementation is verifier-first: [../GOAL.md](../GOAL.md) encodes these decisions as runnable pass/fail conditions; the build happens TDD-style in a separate /goal session against it.
+
 ## Detail C: Affordances
 
 | Affordance        | Kind   | Mechanism                                                                              |

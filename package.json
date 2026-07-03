@@ -1,0 +1,12 @@
+{
+  "name": "captain-hook",
+  "version": "0.1.0",
+  "description": "Dynamic memory for coding agents: chart discoveries as you explore, cache-bust when files change",
+  "type": "module",
+  "bin": {
+    "captain": "./src/captain.ts"
+  },
+  "scripts": {
+    "test": "bun test"
+  }
+}
