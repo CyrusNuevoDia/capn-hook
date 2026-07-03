@@ -16,8 +16,10 @@ The map is add or delete only. Adding is exploration; deleting is cache invalida
 
 ## Install
 
+Requires [bun](https://bun.sh). From this repo:
+
 ```sh
-bun link                # from this repo: puts `captain` on your PATH
+ln -s "$PWD/src/captain.ts" ~/.local/bin/captain   # or any dir on your PATH
 cd /path/to/your/project
 captain init            # .captain/ + Claude Code hooks in .claude/settings.json
 captain init --git      # also install a post-commit hook that prunes

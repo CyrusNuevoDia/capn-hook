@@ -6,10 +6,13 @@ You are the verifier. Run this file cold, top to bottom, against the current sta
 
 ```sh
 REPO=/Users/knrz/Git/CyrusNuevoDia/captain-hook
-cd "$REPO" && bun link          # puts `captain` on PATH
+test -x "$REPO/src/captain.ts"  # entrypoint must be executable with a `#!/usr/bin/env bun` shebang
+BIN=$(mktemp -d) && ln -s "$REPO/src/captain.ts" "$BIN/captain" && export PATH="$BIN:$PATH"
 WORK=$(mktemp -d)               # ALL behavior checks run in $WORK, never in $REPO
 cd "$WORK" && git init -q && git config user.email t@t.co && git config user.name t
 ```
+
+(`bun link` alone does NOT put the bin on PATH — it only registers the package. The symlink bootstrap above is the canonical way to run the verifier, and it's also what makes the git post-commit hook in I4 able to find `captain`.)
 
 Every check below is executed fresh in `$WORK` (or a new mktemp dir where noted). Use a fresh random `session_id` (e.g. `uuidgen`) wherever one is needed — never a constant, since nudge state persists in the OS tmpdir across runs.
 
