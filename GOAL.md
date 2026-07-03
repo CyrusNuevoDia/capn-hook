@@ -64,6 +64,14 @@ Run each in a brand-new mktemp dir with `git init`.
 - **I3** — Idempotent: running `captain init` twice produces no duplicate hook entries.
 - **I4** — `captain init --git` installs an executable `.git/hooks/post-commit` containing `captain prune`. End-to-end: chart an entry, modify its file, `git add -A && git commit -m x` → the stale entry is gone from `map.jsonl` without any manual prune.
 
+### E. Agent-in-the-loop E2E (codex subagent)
+
+The fixture project lives at `tests/treasure-cove/` (a toy marina app; mooring-fee logic hidden in `src/harbor/fees.ts` behind an import chain, with a decoy module).
+
+- **E1** — Fixture integrity: `tests/treasure-cove/README.md` exists, `src/` contains at least 3 files across a subdirectory, `mooringFee` is implemented only in `src/harbor/fees.ts`, and nothing in the fixture mentions captain-hook usage (the agent must learn charting from `captain context` alone).
+- **E2** — `sh "$REPO/tests/agent-e2e.sh"` exits 0. The script copies the fixture to a temp dir, runs `captain init`, embeds live `captain context` output in a codex prompt, and asserts the agent charted an entry referencing `src/harbor/fees.ts` with a matching sha256 and relative path. Read the script first and confirm the prompt teaches nothing about captain beyond the embedded context output — if it does, that is a FAIL (the contract must be self-sufficient).
+- **E3** — After the run, `git -C "$REPO" status --porcelain tests/` is empty (the fixture was never mutated in place).
+
 ### D. Documentation honesty
 
 - **D1** — Every command documented in README.md exists and every command in `captain --help` (or usage output) is documented in README.md — no phantom or undocumented commands.
@@ -71,10 +79,11 @@ Run each in a brand-new mktemp dir with `git init`.
 ## Nice-to-have (do not affect the verdict)
 
 - Git history shows vertical TDD slices (test + minimal impl per behavior) rather than one bulk commit.
+- A full Claude Code session E2E (real SessionStart/Stop hooks firing inside `claude`) — codex E2E covers the contract's teachability; this would cover the hook wiring itself.
 - `captain` with no args or `--help` prints usage and exits nonzero on unknown commands.
 - `captain prune` reports how many entries it deleted only when > 0 (quiet on no-ops, so the post-commit hook stays silent).
 - `bun link` requires no compile step and `captain context` completes in under ~150ms (SessionStart latency).
 
 ## Verdict
 
-Print a table: condition id → PASS/FAIL (with one-line evidence for each FAIL). Overall verdict: **PASS only if every Required condition (T, A, P, R, N, I, D) holds.** Anything less is FAIL, no partial credit, no "essentially done."
+Print a table: condition id → PASS/FAIL (with one-line evidence for each FAIL). Overall verdict: **PASS only if every Required condition (T, A, P, R, N, I, E, D) holds.** Anything less is FAIL, no partial credit, no "essentially done."
