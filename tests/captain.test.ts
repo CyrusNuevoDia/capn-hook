@@ -1,10 +1,27 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { createHash, randomUUID } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 const captainPath = resolve(import.meta.dir, "../src/captain.ts");
+
+const contextContract = `<captain-hook>
+This project keeps a chart of past discoveries: questions earlier sessions answered, and the files that back each answer.
+
+Thinking about finding something? Ask the captain first:
+
+    captain ask "where are payment webhooks handled?"
+
+A hit hands you the answer and the exact files, skipping the whole search. A miss costs seconds; re-exploring costs minutes.
+
+When you do discover a route the hard way (real exploration, more than a couple of tool calls), chart it for the next session:
+
+    captain add "<question>" "<answer with file paths>" --files <comma-separated files backing it>
+
+Entries whose backing files change are deleted automatically, so when the captain answers, the answer is current. Re-add a question to replace its entry; never edit entry files by hand.
+</captain-hook>
+`;
 
 let workDir = "";
 
@@ -16,14 +33,25 @@ afterEach(() => {
   if (workDir) rmSync(workDir, { recursive: true, force: true });
 });
 
-function captain(args: string[] = [], input = "") {
+function captain(args: string[] = [], input = "", cwd = workDir) {
   return Bun.spawnSync({
     cmd: [captainPath, ...args],
-    cwd: workDir,
+    cwd,
+    env: qmdEnv(cwd),
     stdin: input ? Buffer.from(input) : undefined,
     stdout: "pipe",
     stderr: "pipe",
   });
+}
+
+function qmdEnv(cwd = workDir, env: Record<string, string> = {}) {
+  const { XDG_CACHE_HOME: _cache, XDG_CONFIG_HOME: _config, ...base } = process.env;
+  return {
+    ...base,
+    HOME: join(workDir, ".home"),
+    PWD: cwd,
+    ...env,
+  };
 }
 
 function run(cmd: string[], cwd = workDir, env: Record<string, string> = {}) {
@@ -32,108 +60,248 @@ function run(cmd: string[], cwd = workDir, env: Record<string, string> = {}) {
     cwd,
     stdout: "pipe",
     stderr: "pipe",
-    env: { ...process.env, ...env },
+    env: qmdEnv(cwd, env),
   });
 }
 
-test("prints usage for help and rejects missing commands", () => {
+function sha256(value: string) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function entryId(question: string) {
+  return sha256(question).slice(0, 8);
+}
+
+function readJSON(path: string) {
+  return JSON.parse(readFileSync(path, "utf8"));
+}
+
+function initNoEmbedding() {
+  const result = captain(["init", "--no-embedding"]);
+  expect(result.exitCode, result.stderr.toString()).toBe(0);
+}
+
+test("prints updated usage for help and rejects missing commands", () => {
   mkdirSync(join(workDir, ".captain"));
 
   const help = captain(["--help"]);
   expect(help.exitCode).toBe(0);
-  expect(help.stdout.toString()).toContain("captain add");
+  expect(help.stdout.toString()).toContain("captain ask");
+  expect(help.stdout.toString()).toContain("captain init [--git] [--embedding|--no-embedding]");
 
   const missing = captain();
   expect(missing.exitCode).toBe(1);
   expect(missing.stdout.toString()).toContain("Usage:");
 });
 
-test("add stores hashed relative files and replaces the same question", () => {
-  mkdirSync(join(workDir, "src"), { recursive: true });
-  const source = "export const x = 1\n";
-  writeFileSync(join(workDir, "src/a.ts"), source);
+test("add writes QMD markdown entry and derived map", () => {
+  mkdirSync(join(workDir, "src/harbor"), { recursive: true });
+  const source = "export function mooringFee() { return 1 }\n";
+  writeFileSync(join(workDir, "src/harbor/fees.ts"), source);
 
-  const added = captain(["add", "Where is X?", "In src/a.ts", "--files", "src/a.ts"]);
-  expect(added.exitCode).toBe(0);
-  expect(added.stdout.toString()).toContain("charted");
-
-  const replaced = captain(["add", "Where is X?", "Now in src/a.ts", "--files", "src/a.ts"]);
-  expect(replaced.exitCode).toBe(0);
-
-  const lines = readFileSync(join(workDir, ".captain/map.jsonl"), "utf8").trim().split("\n");
-  expect(lines).toHaveLength(1);
-
-  const entry = JSON.parse(lines[0]);
-  expect(entry.id).toMatch(/^[0-9a-f]{8}$/);
-  expect(entry.q).toBe("Where is X?");
-  expect(entry.a).toBe("Now in src/a.ts");
-  expect(entry.files).toEqual([
-    {
-      path: "src/a.ts",
-      hash: createHash("sha256").update(source).digest("hex"),
-    },
+  const added = captain([
+    "add",
+    "Where are mooring fees calculated?",
+    "mooringFee() in src/harbor/fees.ts; invoiced from src/harbor/registry.ts.",
+    "--files",
+    "src/harbor/fees.ts",
   ]);
-  expect(entry.at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  const id = entryId("Where are mooring fees calculated?");
+
+  expect(added.exitCode).toBe(0);
+  expect(added.stdout.toString()).toBe(`charted ${id}\n`);
+  expect(added.stderr.toString()).toContain("captain init");
+
+  const entry = readFileSync(join(workDir, ".captain/entries", `${id}.md`), "utf8");
+  expect(entry).toContain("---\ncaptain: 1\n");
+  expect(entry).toContain(`id: ${id}\n`);
+  expect(entry).toMatch(/at: \d{4}-\d{2}-\d{2}T/);
+  expect(entry).toContain(`files:\n  src/harbor/fees.ts: ${sha256(source)}\n---\n\n`);
+  expect(entry).toContain("# Where are mooring fees calculated?\n\n");
+  expect(entry).toEndWith("mooringFee() in src/harbor/fees.ts; invoiced from src/harbor/registry.ts.\n");
+
+  expect(readJSON(join(workDir, ".captain/map.json"))).toEqual({
+    "src/harbor/fees.ts": {
+      hash: sha256(source),
+      entries: [id],
+    },
+  });
 });
 
-test("prune removes stale file entries and delete removes a selected entry", () => {
+test("add refuses missing files without writing storage", () => {
+  const added = captain(["add", "Where is the anchor?", "src/anchor.ts", "--files", "src/anchor.ts"]);
+
+  expect(added.exitCode).toBe(1);
+  expect(added.stderr.toString()).toContain("missing or not a regular file: src/anchor.ts");
+  expect(existsSync(join(workDir, ".captain"))).toBe(false);
+});
+
+test("re-adding the same question replaces the entry and map rows", () => {
   mkdirSync(join(workDir, "src"), { recursive: true });
-  writeFileSync(join(workDir, "src/a.ts"), "export const x = 1\n");
-  writeFileSync(join(workDir, "src/b.ts"), "export const y = 2\n");
+  writeFileSync(join(workDir, "src/a.ts"), "export const a = 1\n");
+  writeFileSync(join(workDir, "src/b.ts"), "export const b = 2\n");
 
-  expect(captain(["add", "Where is X?", "In src/a.ts", "--files", "src/a.ts"]).exitCode).toBe(0);
-  expect(captain(["add", "Where is Y?", "In src/b.ts", "--files", "src/b.ts"]).exitCode).toBe(0);
+  expect(captain(["add", "Where is X?", "First answer", "--files", "src/a.ts"]).exitCode).toBe(0);
+  expect(captain(["add", "Where is X?", "Second answer", "--files", "src/b.ts"]).exitCode).toBe(0);
 
-  const freshPrune = captain(["prune"]);
-  expect(freshPrune.exitCode).toBe(0);
-  expect(freshPrune.stdout.toString()).toBe("");
-  expect(readFileSync(join(workDir, ".captain/map.jsonl"), "utf8").trim().split("\n")).toHaveLength(2);
+  const entries = readdirSync(join(workDir, ".captain/entries"));
+  const id = entryId("Where is X?");
+  expect(entries).toEqual([`${id}.md`]);
+  expect(readFileSync(join(workDir, ".captain/entries", `${id}.md`), "utf8")).toContain("Second answer\n");
+  expect(readJSON(join(workDir, ".captain/map.json"))).toEqual({
+    "src/b.ts": {
+      hash: sha256("export const b = 2\n"),
+      entries: [id],
+    },
+  });
+});
 
-  writeFileSync(join(workDir, "src/a.ts"), "export const x = 99\n");
-  const stalePrune = captain(["prune"]);
-  expect(stalePrune.exitCode).toBe(0);
-  expect(stalePrune.stdout.toString()).toContain("pruned 1 stale entries");
+test("add from a subdirectory stores root-relative POSIX file paths", () => {
+  expect(run(["git", "init", "-q"]).exitCode).toBe(0);
+  mkdirSync(join(workDir, "src/deep"), { recursive: true });
+  writeFileSync(join(workDir, "src/deep/a.ts"), "export const a = 1\n");
 
-  let entries = readFileSync(join(workDir, ".captain/map.jsonl"), "utf8").trim().split("\n").map((line) => JSON.parse(line));
-  expect(entries).toHaveLength(1);
-  expect(entries[0].q).toBe("Where is Y?");
+  const added = captain(["add", "Where is deep A?", "src/deep/a.ts", "--files", "a.ts"], "", join(workDir, "src/deep"));
 
-  const deleted = captain(["delete", entries[0].id]);
+  expect(added.exitCode).toBe(0);
+  expect(readJSON(join(workDir, ".captain/map.json"))).toEqual({
+    "src/deep/a.ts": {
+      hash: sha256("export const a = 1\n"),
+      entries: [entryId("Where is deep A?")],
+    },
+  });
+});
+
+test("ask returns a charted entry through BM25", () => {
+  mkdirSync(join(workDir, "src"), { recursive: true });
+  writeFileSync(join(workDir, "src/payments.ts"), "export const webhook = true\n");
+  initNoEmbedding();
+  expect(
+    captain(["add", "Where are payment webhooks handled?", "They are handled in src/payments.ts.", "--files", "src/payments.ts"])
+      .exitCode,
+  ).toBe(0);
+
+  const asked = captain(["ask", "payment webhooks"]);
+
+  expect(asked.exitCode, asked.stderr.toString()).toBe(0);
+  expect(asked.stdout.toString()).toContain("Where are payment webhooks handled?");
+  expect(asked.stdout.toString()).toContain("They are handled in src/payments.ts.");
+  expect(asked.stdout.toString()).toContain("files: src/payments.ts");
+  expect(asked.stdout.toString()).toMatch(/score: \d+%/);
+});
+
+test("ask prunes stale entries before recall and prints the miss contract", () => {
+  mkdirSync(join(workDir, "src"), { recursive: true });
+  writeFileSync(join(workDir, "src/stale.ts"), "export const stale = 1\n");
+  initNoEmbedding();
+  expect(captain(["add", "Where is stale?", "In src/stale.ts", "--files", "src/stale.ts"]).exitCode).toBe(0);
+  const id = entryId("Where is stale?");
+  writeFileSync(join(workDir, "src/stale.ts"), "export const stale = 2\n");
+
+  const asked = captain(["ask", "Where is stale?"]);
+
+  expect(asked.exitCode).toBe(0);
+  expect(asked.stdout.toString()).toBe(
+    'No charted answer. Explore, then chart what you find:\n  captain add "Where is stale?" "<answer with paths>" --files <files>\n',
+  );
+  expect(existsSync(join(workDir, ".captain/entries", `${id}.md`))).toBe(false);
+});
+
+test("ask with no hits prints the no-charted-answer contract", () => {
+  initNoEmbedding();
+
+  const asked = captain(["ask", "where is the compass?"]);
+
+  expect(asked.exitCode).toBe(0);
+  expect(asked.stdout.toString()).toBe(
+    'No charted answer. Explore, then chart what you find:\n  captain add "where is the compass?" "<answer with paths>" --files <files>\n',
+  );
+});
+
+test("bust removes entries that cite a file", () => {
+  mkdirSync(join(workDir, "src"), { recursive: true });
+  writeFileSync(join(workDir, "src/a.ts"), "a\n");
+  writeFileSync(join(workDir, "src/b.ts"), "b\n");
+  expect(captain(["add", "Where is A?", "src/a.ts", "--files", "src/a.ts"]).exitCode).toBe(0);
+  expect(captain(["add", "Where is B?", "src/b.ts", "--files", "src/b.ts"]).exitCode).toBe(0);
+
+  const busted = captain(["bust", "src/a.ts"]);
+
+  expect(busted.exitCode).toBe(0);
+  expect(busted.stdout.toString()).toBe("busted 1 entries\n");
+  expect(existsSync(join(workDir, ".captain/entries", `${entryId("Where is A?")}.md`))).toBe(false);
+  expect(readJSON(join(workDir, ".captain/map.json"))).toEqual({
+    "src/b.ts": {
+      hash: sha256("b\n"),
+      entries: [entryId("Where is B?")],
+    },
+  });
+});
+
+test("prune is quiet on no-op, reports stale entries, and rebuilds map.json", () => {
+  mkdirSync(join(workDir, "src"), { recursive: true });
+  writeFileSync(join(workDir, "src/a.ts"), "a\n");
+  expect(captain(["add", "Where is A?", "src/a.ts", "--files", "src/a.ts"]).exitCode).toBe(0);
+  rmSync(join(workDir, ".captain/map.json"));
+
+  const fresh = captain(["prune"]);
+  expect(fresh.exitCode).toBe(0);
+  expect(fresh.stdout.toString()).toBe("");
+  expect(readJSON(join(workDir, ".captain/map.json"))).toEqual({
+    "src/a.ts": {
+      hash: sha256("a\n"),
+      entries: [entryId("Where is A?")],
+    },
+  });
+
+  writeFileSync(join(workDir, ".captain/map.json"), "{nope");
+  const rebuilt = captain(["bust", "src/missing.ts"]);
+  expect(rebuilt.exitCode).toBe(0);
+  expect(readJSON(join(workDir, ".captain/map.json"))["src/a.ts"].entries).toEqual([entryId("Where is A?")]);
+
+  writeFileSync(join(workDir, "src/a.ts"), "changed\n");
+  const stale = captain(["prune"]);
+  expect(stale.exitCode).toBe(0);
+  expect(stale.stdout.toString()).toBe("pruned 1 stale entries\n");
+  expect(readJSON(join(workDir, ".captain/map.json"))).toEqual({});
+});
+
+test("delete removes an entry by id and rejects unknown ids", () => {
+  mkdirSync(join(workDir, "src"), { recursive: true });
+  writeFileSync(join(workDir, "src/a.ts"), "a\n");
+  expect(captain(["add", "Where is A?", "src/a.ts", "--files", "src/a.ts"]).exitCode).toBe(0);
+
+  const unknown = captain(["delete", "ffffffff"]);
+  expect(unknown.exitCode).toBe(1);
+  expect(unknown.stderr.toString()).toContain("unknown id: ffffffff");
+
+  const deleted = captain(["delete", entryId("Where is A?")]);
   expect(deleted.exitCode).toBe(0);
-  expect(readFileSync(join(workDir, ".captain/map.jsonl"), "utf8")).toBe("");
+  expect(existsSync(join(workDir, ".captain/entries", `${entryId("Where is A?")}.md`))).toBe(false);
+  expect(readJSON(join(workDir, ".captain/map.json"))).toEqual({});
 });
 
-test("list and context recall entries, and context prunes before printing its contract", () => {
+test("list prints entries straight from markdown files", () => {
   mkdirSync(join(workDir, "src"), { recursive: true });
-  writeFileSync(join(workDir, "src/a.ts"), "export const x = 1\n");
-  expect(captain(["add", "Where is X?", "In src/a.ts", "--files", "src/a.ts"]).exitCode).toBe(0);
+  writeFileSync(join(workDir, "src/a.ts"), "a\n");
+  expect(captain(["add", "Where is A?", "Answer in src/a.ts", "--files", "src/a.ts"]).exitCode).toBe(0);
+  writeFileSync(join(workDir, ".captain/map.json"), "{}");
 
   const listed = captain(["list"]);
+
   expect(listed.exitCode).toBe(0);
-  const listOut = listed.stdout.toString();
-  expect(listOut).toContain("Where is X?");
-  expect(listOut).toContain("In src/a.ts");
-  expect(listOut).toContain("src/a.ts");
-  expect(listOut).toMatch(/[0-9a-f]{8}/);
+  expect(listed.stdout.toString()).toContain(entryId("Where is A?"));
+  expect(listed.stdout.toString()).toContain("Q: Where is A?");
+  expect(listed.stdout.toString()).toContain("A: Answer in src/a.ts");
+  expect(listed.stdout.toString()).toContain("  - src/a.ts");
+});
 
-  const context = captain(["context"]);
-  expect(context.exitCode).toBe(0);
-  const contextOut = context.stdout.toString();
-  expect(contextOut).toContain("Where is X?");
-  expect(contextOut).toContain("In src/a.ts");
-  expect(contextOut).toContain('captain add "<question>" "<answer with paths>" --files <files>');
+test("context prints the exact static contract", () => {
+  mkdirSync(join(workDir, ".captain"));
+  const result = captain(["context"]);
 
-  writeFileSync(join(workDir, "src/a.ts"), "export const x = 2\n");
-  const prunedContext = captain(["context"]);
-  expect(prunedContext.exitCode).toBe(0);
-  const prunedOut = prunedContext.stdout.toString();
-  expect(prunedOut).not.toContain("Where is X?");
-  expect(prunedOut).toContain("captain add");
-
-  rmSync(join(workDir, ".captain"), { recursive: true, force: true });
-  const emptyContext = captain(["context"]);
-  expect(emptyContext.exitCode).toBe(0);
-  expect(emptyContext.stdout.toString()).toContain("captain add");
+  expect(result.exitCode).toBe(0);
+  expect(result.stdout.toString()).toBe(contextContract);
 });
 
 test("nudge blocks once per session unless a stop hook is already active", () => {
@@ -144,7 +312,9 @@ test("nudge blocks once per session unless a stop hook is already active", () =>
   expect(first.exitCode).toBe(0);
   const firstJSON = JSON.parse(first.stdout.toString());
   expect(firstJSON.decision).toBe("block");
-  expect(firstJSON.reason).toContain("captain add");
+  expect(firstJSON.reason).toBe(
+    'Captain\'s log before you go: did this session discover any routes worth charting - where things live, how something works? Chart each with: captain add "<question>" "<answer with file paths>" --files <files>. If nothing is worth keeping, just stop again.',
+  );
 
   const second = captain(["nudge"], input);
   expect(second.exitCode).toBe(0);
@@ -155,7 +325,7 @@ test("nudge blocks once per session unless a stop hook is already active", () =>
   expect(active.stdout.toString()).toBe("");
 });
 
-test("init merges Claude hooks idempotently and git post-commit prunes stale entries", () => {
+test("init is idempotent and installs QMD, Claude hooks, gitignore, config, and post-commit pruning", () => {
   expect(run(["git", "init", "-q"]).exitCode).toBe(0);
   expect(run(["git", "config", "user.email", "t@t.co"]).exitCode).toBe(0);
   expect(run(["git", "config", "user.name", "t"]).exitCode).toBe(0);
@@ -171,12 +341,17 @@ test("init merges Claude hooks idempotently and git post-commit prunes stale ent
     }),
   );
 
-  const first = captain(["init", "--git"]);
-  expect(first.exitCode).toBe(0);
-  const second = captain(["init", "--git"]);
-  expect(second.exitCode).toBe(0);
+  const first = captain(["init", "--git", "--no-embedding"]);
+  expect(first.exitCode, first.stderr.toString()).toBe(0);
+  const second = captain(["init", "--git", "--no-embedding"]);
+  expect(second.exitCode, second.stderr.toString()).toBe(0);
 
-  const settings = JSON.parse(readFileSync(join(workDir, ".claude/settings.json"), "utf8"));
+  expect(readJSON(join(workDir, ".captain/config.json"))).toEqual({ embedding: false });
+  expect(existsSync(join(workDir, ".qmd/index.yml"))).toBe(true);
+  expect(existsSync(join(workDir, ".qmd/index.sqlite"))).toBe(true);
+  expect(readFileSync(join(workDir, ".gitignore"), "utf8").split("\n").filter((line) => line === ".qmd/")).toHaveLength(1);
+
+  const settings = readJSON(join(workDir, ".claude/settings.json"));
   expect(settings.model).toBe("sonnet");
   const sessionCommands = settings.hooks.SessionStart.flatMap((group: { hooks: { command: string }[] }) =>
     group.hooks.map((hook) => hook.command),
@@ -202,6 +377,7 @@ test("init merges Claude hooks idempotently and git post-commit prunes stale ent
 
   expect(run(["git", "add", "-A"], workDir, { PATH: `${binDir}:${process.env.PATH ?? ""}` }).exitCode).toBe(0);
   const commit = run(["git", "commit", "-m", "x"], workDir, { PATH: `${binDir}:${process.env.PATH ?? ""}` });
-  expect(commit.exitCode).toBe(0);
-  expect(readFileSync(join(workDir, ".captain/map.jsonl"), "utf8")).toBe("");
+  expect(commit.exitCode, commit.stderr.toString()).toBe(0);
+  expect(readJSON(join(workDir, ".captain/map.json"))).toEqual({});
+  expect(existsSync(join(workDir, ".captain/entries", `${entryId("Where is X?")}.md`))).toBe(false);
 });
