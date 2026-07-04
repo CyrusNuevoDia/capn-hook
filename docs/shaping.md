@@ -123,3 +123,15 @@ v0.3 adds prediction-error-driven user modeling beside the codebase chart. Chart
 | D11 | Add `.capn/MIND.md` as the user's theory of mind, but keep it per-user and never rewrite it in-session | 🟡 |
 | D12 | Run consolidation offline: `capn consolidate` writes a packet tmpfile containing current MIND plus resolved and unresolved journal entries; a scheduled agent rewrites MIND.md and then runs `capn consolidate --clear` | 🟡 |
 | D13 | Gitignore `.capn/journal/` and `.capn/MIND.md`; they are local user memory, not project knowledge to commit | 🟡 |
+
+### v0.4 decision (2026-07-04)
+
+v0.4 consumes qmd as an SDK library instead of a spawned CLI. The motivation was a user-raised collision with host projects that already use qmd: capn's private chart and journal indexes must not mutate or become visible through the host's `.qmd/`, global `~/.config/qmd`, or collection registry.
+
+| Part | Decision | Flag |
+| ---- | -------- | :--: |
+| D14 | Import `createStore` from `@tobilu/qmd` lazily in-process for commands that touch the index, instead of shelling out to `qmd` | 🟡 |
+| D15 | Store all capn index state at `.capn/qmd/index.sqlite`; `.capn/entries/` and `.capn/journal/` remain the durable markdown sources, and `capn init` rebuilds the sqlite | 🟡 |
+| D16 | Keep capn invisible to a host project's own qmd install: no root `.qmd/`, no global `~/.config/qmd` writes, no shared collections, and no cross-contaminated search results | 🟡 |
+| D17 | Evidence from the Bun spike: explicit `dbPath`, zero external writes, and clean per-collection scoping; evidence from the symlink probe: Bun resolves the entrypoint realpath to capn's own `node_modules` | 🟡 |
+| D18 | Delete the old subprocess plumbing: PWD pinning, stdout slicing, collection-add idempotence dance, and default-scope exclusion; retire the "never import qmd" rule from AGENTS.md | 🟡 |

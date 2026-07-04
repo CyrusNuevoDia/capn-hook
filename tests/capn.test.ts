@@ -7,6 +7,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -15,6 +16,7 @@ import { join, resolve } from "node:path";
 import { spawnSync } from "bun";
 
 const capnPath = resolve(import.meta.dir, "../src/capn.ts");
+const qmdPath = resolve(import.meta.dir, "../node_modules/.bin/qmd");
 const predictedIdPattern = /^predicted ([0-9a-f]{8})\n$/;
 const isoDatePrefixPattern = /at: \d{4}-\d{2}-\d{2}T/;
 const rewardedAtPrefixPattern = /rewardedAt: \d{4}-\d{2}-\d{2}T/;
@@ -92,6 +94,26 @@ function run(cmd: string[], cwd = workDir, env: Record<string, string> = {}) {
     stderr: "pipe",
     env: qmdEnv(cwd, env),
   });
+}
+
+function qmd(args: string[], cwd = workDir) {
+  return run([qmdPath, ...args], cwd);
+}
+
+function dotQMDDirs(root: string, current = root): string[] {
+  return readdirSync(current)
+    .flatMap((name) => {
+      const path = join(current, name);
+      if (!statSync(path).isDirectory()) {
+        return [];
+      }
+      const relativePath = path.slice(root.length + 1);
+      return [
+        ...(name === ".qmd" ? [relativePath] : []),
+        ...dotQMDDirs(root, path),
+      ];
+    })
+    .sort();
 }
 
 function sha256(value: string) {
@@ -669,7 +691,7 @@ test("nudge blocks once per session unless a stop hook is already active", () =>
   expect(active.stdout.toString()).toBe("");
 });
 
-test("init is idempotent and installs QMD, Claude/Codex hooks, gitignore, config, and post-commit pruning", () => {
+test("init is idempotent and installs QMD SDK storage, hooks, gitignore, config, and post-commit pruning", () => {
   expect(run(["git", "init", "-q"]).exitCode).toBe(0);
   expect(run(["git", "config", "user.email", "t@t.co"]).exitCode).toBe(0);
   expect(run(["git", "config", "user.name", "t"]).exitCode).toBe(0);
@@ -708,23 +730,22 @@ test("init is idempotent and installs QMD, Claude/Codex hooks, gitignore, config
     embedding: false,
   });
   expect(existsSync(join(workDir, ".capn/journal"))).toBe(true);
-  expect(existsSync(join(workDir, ".qmd/index.yml"))).toBe(true);
-  expect(existsSync(join(workDir, ".qmd/index.sqlite"))).toBe(true);
+  expect(existsSync(join(workDir, ".capn/qmd/index.sqlite"))).toBe(true);
+  expect(existsSync(join(workDir, ".qmd"))).toBe(false);
   const gitignoreLines = readFileSync(
     join(workDir, ".gitignore"),
     "utf8"
   ).split("\n");
-  expect(gitignoreLines.filter((line) => line === ".qmd/")).toHaveLength(1);
+  expect(gitignoreLines.filter((line) => line === ".capn/qmd/")).toHaveLength(
+    1
+  );
+  expect(gitignoreLines.filter((line) => line === ".qmd/")).toHaveLength(0);
   expect(
     gitignoreLines.filter((line) => line === ".capn/journal/")
   ).toHaveLength(1);
   expect(
     gitignoreLines.filter((line) => line === ".capn/MIND.md")
   ).toHaveLength(1);
-  const qmdIndex = readFileSync(join(workDir, ".qmd/index.yml"), "utf8");
-  expect(qmdIndex).toContain("  capn:");
-  expect(qmdIndex).toContain("  journal:");
-  expect(qmdIndex).toContain("includeByDefault: false");
 
   expect(readJSON(join(workDir, ".claude/settings.json"))).toEqual({
     model: "sonnet",
@@ -783,6 +804,9 @@ test("init is idempotent and installs QMD, Claude/Codex hooks, gitignore, config
     capn(["chart", "Where is X?", "In src/a.ts", "--files", "src/a.ts"])
       .exitCode
   ).toBe(0);
+  const asked = capn(["ask", "Where is X?"]);
+  expect(asked.exitCode, asked.stderr.toString()).toBe(0);
+  expect(asked.stdout.toString()).toContain("In src/a.ts");
   writeFileSync(join(workDir, "src/a.ts"), "export const x = 2\n");
 
   expect(
@@ -798,4 +822,70 @@ test("init is idempotent and installs QMD, Claude/Codex hooks, gitignore, config
   expect(
     existsSync(join(workDir, ".capn/entries", `${entryId("Where is X?")}.md`))
   ).toBe(false);
+});
+
+test("capn qmd storage coexists with an existing host qmd project", () => {
+  mkdirSync(join(workDir, "docs"), { recursive: true });
+  writeFileSync(
+    join(workDir, "docs/host.md"),
+    "# Host Docs\n\nhost-lighthouse-keyword lives only in host qmd.\n"
+  );
+
+  const hostConfigPath = join(workDir, ".home/.config/qmd/index.yml");
+  const beforeGlobalConfig = existsSync(hostConfigPath)
+    ? readFileSync(hostConfigPath, "utf8")
+    : undefined;
+
+  expect(qmd(["init"]).exitCode).toBe(0);
+  expect(
+    qmd(["collection", "add", join(workDir, "docs"), "--name", "hostdocs"])
+      .exitCode
+  ).toBe(0);
+  expect(qmd(["update"]).exitCode).toBe(0);
+  const hostIndexPath = join(workDir, ".qmd/index.yml");
+  const hostIndex = readFileSync(hostIndexPath);
+  expect(dotQMDDirs(workDir)).toEqual([".qmd"]);
+
+  initNoEmbedding();
+  mkdirSync(join(workDir, "src"), { recursive: true });
+  writeFileSync(join(workDir, "src/capn.ts"), "export const capn = true\n");
+  expect(
+    capn([
+      "chart",
+      "Where is capn-sdk-keyword recorded?",
+      "capn-sdk-keyword lives in src/capn.ts.",
+      "--files",
+      "src/capn.ts",
+    ]).exitCode
+  ).toBe(0);
+  const asked = capn(["ask", "capn-sdk-keyword"]);
+  expect(asked.exitCode, asked.stderr.toString()).toBe(0);
+  expect(asked.stdout.toString()).toContain("capn-sdk-keyword lives");
+  expect(asked.stdout.toString()).not.toContain("host-lighthouse-keyword");
+
+  expect(readFileSync(hostIndexPath)).toEqual(hostIndex);
+  const hostCollections = qmd(["collection", "list"]);
+  expect(hostCollections.exitCode, hostCollections.stderr.toString()).toBe(0);
+  expect(hostCollections.stdout.toString()).toContain("hostdocs");
+  expect(hostCollections.stdout.toString()).not.toContain("capn");
+  expect(hostCollections.stdout.toString()).not.toContain("journal");
+
+  const hostAskedByCapn = capn(["ask", "host-lighthouse-keyword"]);
+  expect(hostAskedByCapn.exitCode, hostAskedByCapn.stderr.toString()).toBe(0);
+  expect(hostAskedByCapn.stdout.toString()).not.toContain("Host Docs");
+  expect(hostAskedByCapn.stdout.toString()).not.toContain(
+    "host-lighthouse-keyword lives"
+  );
+
+  const capnAskedByHost = qmd(["search", "capn-sdk-keyword"]);
+  expect(capnAskedByHost.exitCode, capnAskedByHost.stderr.toString()).toBe(0);
+  expect(capnAskedByHost.stdout.toString()).not.toContain("capn-sdk-keyword");
+  expect(capnAskedByHost.stdout.toString()).not.toContain("src/capn.ts");
+
+  expect(dotQMDDirs(workDir)).toEqual([".qmd"]);
+  if (beforeGlobalConfig === undefined) {
+    expect(existsSync(hostConfigPath)).toBe(false);
+  } else {
+    expect(readFileSync(hostConfigPath, "utf8")).toBe(beforeGlobalConfig);
+  }
 });

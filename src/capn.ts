@@ -6,7 +6,6 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
-  realpathSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -36,14 +35,32 @@ type CommandHook = { command?: string; type?: string };
 type HookGroup = { hooks?: CommandHook[] };
 type HookConfig = { hooks?: Record<string, HookGroup[]> };
 type InitOptions = { embedding?: boolean; git: boolean };
-type QMDHit = { file?: string; score?: number };
+type SearchHit = { file?: string; filepath?: string; score?: number };
+type CapnStore = {
+  addContext: (
+    collectionName: string,
+    pathPrefix: string,
+    contextText: string
+  ) => Promise<boolean>;
+  close: () => Promise<void>;
+  embed: (options?: Record<string, unknown>) => Promise<unknown>;
+  listContexts: () => Promise<
+    Array<{ collection: string; path: string; context: string }>
+  >;
+  search: (options: {
+    query: string;
+    collection: string;
+    limit: number;
+  }) => Promise<SearchHit[]>;
+  searchLex: (
+    query: string,
+    options: { collection: string; limit: number }
+  ) => Promise<SearchHit[]>;
+  update: (options?: Record<string, unknown>) => Promise<unknown>;
+};
 const noChartedAnswer = (question: string) =>
   `No charted answer. Explore, then chart what you find:\n  capn chart "${question}" "<answer with paths>" --files <files>\n`;
-const qmdHint =
-  "qmd not found. Install with: bun add @tobilu/qmd, or bun install -g @tobilu/qmd\n";
 const markdownExtensionPattern = /\.md$/;
-const qmdJSONStartPattern = /^\s*[[{]/m;
-const journalCollectionBlockPattern = / {2}journal:\n(?: {4}.+\n?)*/;
 const trailingNewlinePattern = /\n$/;
 function usage() {
   return `Usage:
@@ -394,79 +411,6 @@ function entryIsFresh(root: string, entry: Entry) {
     }
   });
 }
-function resolveQMD() {
-  let current = dirname(realpathSync(import.meta.path));
-  while (true) {
-    const candidate = resolve(current, "node_modules/.bin/qmd");
-    if (existsSync(candidate)) {
-      return candidate;
-    }
-    const parent = dirname(current);
-    if (parent === current) {
-      break;
-    }
-    current = parent;
-  }
-  const which = spawnSync({
-    cmd: ["which", "qmd"],
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  if (which.exitCode === 0) {
-    return which.stdout.toString().trim();
-  }
-  return "";
-}
-function requireQMD() {
-  const qmd = resolveQMD();
-  if (!qmd) {
-    fail(qmdHint);
-  }
-  return qmd;
-}
-function runQMD(root: string, args: string[], qmd = requireQMD()) {
-  const result = spawnSync({
-    cmd: [qmd, ...args],
-    cwd: root,
-    env: { ...process.env, PWD: root },
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  if (result.exitCode !== 0) {
-    const stderr = result.stderr.toString();
-    fail(
-      stderr || result.stdout.toString() || `qmd ${args.join(" ")} failed\n`
-    );
-  }
-  return result.stdout.toString();
-}
-function parseQMDHits(output: string) {
-  const jsonStart = output.search(qmdJSONStartPattern);
-  const payload = jsonStart === -1 ? output : output.slice(jsonStart);
-  try {
-    return JSON.parse(payload || "[]") as QMDHit[];
-  } catch {
-    fail(`could not parse qmd output: ${output.slice(0, 200)}`);
-  }
-}
-function hasQMDCollection(root: string, name: string) {
-  const indexPath = resolve(root, ".qmd/index.yml");
-  return (
-    existsSync(indexPath) &&
-    readFileSync(indexPath, "utf8").includes(`  ${name}:\n`)
-  );
-}
-function hasCapnCollection(root: string, _qmd: string) {
-  return hasQMDCollection(root, "capn");
-}
-function qmdIndex(root: string) {
-  const indexPath = resolve(root, ".qmd/index.yml");
-  return existsSync(indexPath) ? readFileSync(indexPath, "utf8") : "";
-}
-function journalExcludedFromDefaultScope(root: string) {
-  const block = qmdIndex(root).match(journalCollectionBlockPattern)?.[0] ?? "";
-  return block.includes("includeByDefault: false");
-}
 function config(root: string) {
   try {
     const parsed = JSON.parse(readFileSync(configPath(root), "utf8"));
@@ -475,8 +419,41 @@ function config(root: string) {
     return { embedding: true };
   }
 }
-function updateQMDIfReady(root: string, embed = false, warn = false) {
-  if (!existsSync(resolve(root, ".qmd"))) {
+function hitId(hit: SearchHit) {
+  const file = hit.file || hit.filepath || "";
+  return basename(file).replace(markdownExtensionPattern, "");
+}
+function qmdDir(root: string) {
+  return resolve(capnDir(root), "qmd");
+}
+function qmdDBPath(root: string) {
+  return resolve(qmdDir(root), "index.sqlite");
+}
+async function openStore(root: string) {
+  let createStore: (options: {
+    dbPath: string;
+    config: {
+      collections: Record<string, { path: string; pattern: string }>;
+    };
+  }) => Promise<CapnStore>;
+  try {
+    ({ createStore } = await import("@tobilu/qmd"));
+  } catch {
+    fail("qmd SDK not available. Run bun install in the capn repo.\n");
+  }
+  mkdirSync(qmdDir(root), { recursive: true });
+  return createStore({
+    dbPath: qmdDBPath(root),
+    config: {
+      collections: {
+        capn: { path: entriesDir(root), pattern: "**/*.md" },
+        journal: { path: journalDir(root), pattern: "**/*.md" },
+      },
+    },
+  });
+}
+async function syncIndex(root: string, embed = false, warn = false) {
+  if (!existsSync(qmdDir(root))) {
     if (warn) {
       process.stderr.write(
         "capn storage updated; run capn init to enable QMD recall\n"
@@ -484,18 +461,14 @@ function updateQMDIfReady(root: string, embed = false, warn = false) {
     }
     return;
   }
-  const qmd = requireQMD();
-  if (!(hasQMDCollection(root, "capn") || hasQMDCollection(root, "journal"))) {
-    if (warn) {
-      process.stderr.write(
-        "capn storage updated; run capn init to enable QMD recall\n"
-      );
+  const store = await openStore(root);
+  try {
+    await store.update({});
+    if (embed) {
+      await store.embed({});
     }
-    return;
-  }
-  runQMD(root, ["update"], qmd);
-  if (embed) {
-    runQMD(root, ["embed"], qmd);
+  } finally {
+    await store.close();
   }
 }
 function deleteEntries(root: string, ids: Set<string>) {
@@ -511,7 +484,7 @@ function deleteEntries(root: string, ids: Set<string>) {
   writeMap(root);
   return count;
 }
-function prune(root = findProjectRoot(process.cwd()), announce = true) {
+async function prune(root = findProjectRoot(process.cwd()), announce = true) {
   readMap(root);
   const entries = readEntries(root);
   const stale = new Set(
@@ -524,13 +497,13 @@ function prune(root = findProjectRoot(process.cwd()), announce = true) {
     return 0;
   }
   const count = deleteEntries(root, stale);
-  updateQMDIfReady(root);
+  await syncIndex(root);
   if (announce) {
     process.stdout.write(`pruned ${count} stale entries\n`);
   }
   return count;
 }
-function chart(args: string[]) {
+async function chart(args: string[]) {
   const [question, answer] = args;
   const files = parseFiles(args.slice(2));
   if (!(question && answer) || files.length === 0) {
@@ -565,53 +538,52 @@ function chart(args: string[]) {
     at: new Date().toISOString(),
   });
   writeMap(root);
-  updateQMDIfReady(root, config(root).embedding, true);
+  await syncIndex(root, config(root).embedding, true);
   process.stdout.write(`charted ${id}\n`);
 }
 function miss(question: string) {
   process.stdout.write(noChartedAnswer(question));
 }
-function ask(args: string[]) {
+async function ask(args: string[]) {
   const question = args[0];
   if (!question) {
     fail("capn ask requires a question");
   }
   const root = findProjectRoot(process.cwd());
-  prune(root, false);
-  const qmd = requireQMD();
-  if (!hasCapnCollection(root, qmd)) {
+  await prune(root, false);
+  if (!existsSync(qmdDBPath(root))) {
     fail("capn recall is not initialized. Run capn init.\n");
   }
-  const command = config(root).embedding ? "query" : "search";
-  const output = runQMD(
-    root,
-    [command, question, "-c", "capn", "-n", "5", "--format", "json"],
-    qmd
-  );
-  const hits = parseQMDHits(output);
   const entries = new Map(readEntries(root).map((entry) => [entry.id, entry]));
-  const found = hits
-    .map((hit) => {
-      const file = hit.file || "";
-      const id = basename(file).replace(markdownExtensionPattern, "");
-      return { entry: entries.get(id), score: Number(hit.score ?? 0) };
-    })
-    .filter((hit): hit is { entry: Entry; score: number } =>
-      Boolean(hit.entry)
-    );
-  if (found.length === 0) {
-    miss(question);
-    return;
-  }
-  for (const hit of found) {
-    const score =
-      hit.score <= 1 ? Math.round(hit.score * 100) : Math.round(hit.score);
-    process.stdout.write(
-      `${hit.entry.question}\n${hit.entry.answer.trimEnd()}\nfiles: ${Object.keys(hit.entry.files).join(", ")}\nscore: ${score}%\n\n`
-    );
+  const store = await openStore(root);
+  try {
+    const hits = await (config(root).embedding
+      ? store.search({ query: question, collection: "capn", limit: 5 })
+      : store.searchLex(question, { collection: "capn", limit: 5 }));
+    const found = hits
+      .map((hit) => {
+        const id = hitId(hit);
+        return { entry: entries.get(id), score: Number(hit.score ?? 0) };
+      })
+      .filter((hit): hit is { entry: Entry; score: number } =>
+        Boolean(hit.entry)
+      );
+    if (found.length === 0) {
+      miss(question);
+      return;
+    }
+    for (const hit of found) {
+      const score =
+        hit.score <= 1 ? Math.round(hit.score * 100) : Math.round(hit.score);
+      process.stdout.write(
+        `${hit.entry.question}\n${hit.entry.answer.trimEnd()}\nfiles: ${Object.keys(hit.entry.files).join(", ")}\nscore: ${score}%\n\n`
+      );
+    }
+  } finally {
+    await store.close();
   }
 }
-function predict(args: string[]) {
+async function predict(args: string[]) {
   const text = args[0];
   if (!text) {
     fail("capn predict requires prediction text");
@@ -623,7 +595,7 @@ function predict(args: string[]) {
   const at = new Date().toISOString();
   const id = sha256(text + at).slice(0, 8);
   writeJournalEntry(root, { id, at, text });
-  updateQMDIfReady(root, config(root).embedding, true);
+  await syncIndex(root, config(root).embedding, true);
   process.stdout.write(`predicted ${id}\n`);
 }
 function reflectMiss() {
@@ -631,7 +603,7 @@ function reflectMiss() {
     'No reflections on that yet. When unsure how your user will respond, chart a prediction:\n  capn predict "<compact prediction>"\n'
   );
 }
-function reflect(args: string[]) {
+async function reflect(args: string[]) {
   const question = args[0];
   if (!question) {
     fail("capn reflect requires a question");
@@ -644,44 +616,42 @@ function reflect(args: string[]) {
     reflectMiss();
     return;
   }
-  const qmd = requireQMD();
-  if (!hasQMDCollection(root, "journal")) {
+  if (!existsSync(qmdDBPath(root))) {
     fail("capn journal recall is not initialized. Run capn init.\n");
   }
-  const command = config(root).embedding ? "query" : "search";
-  const hits = parseQMDHits(
-    runQMD(
-      root,
-      [command, question, "-c", "journal", "-n", "5", "--format", "json"],
-      qmd
-    )
-  );
-  const found = hits
-    .map((hit) => {
-      const file = hit.file || "";
-      const id = basename(file).replace(markdownExtensionPattern, "");
-      return { entry: journal.get(id), score: Number(hit.score ?? 0) };
-    })
-    .filter((hit): hit is { entry: JournalEntry; score: number } =>
-      Boolean(hit.entry)
-    );
-  if (found.length === 0) {
-    reflectMiss();
-    return;
-  }
-  for (const hit of found) {
-    const relevance =
-      hit.score <= 1 ? Math.round(hit.score * 100) : Math.round(hit.score);
-    const outcome =
-      hit.entry.score === undefined
-        ? "(unresolved)"
-        : `score: ${hit.entry.score} — ${hit.entry.observation ?? ""}`;
-    process.stdout.write(
-      `${hit.entry.text}\n${outcome}\nrelevance: ${relevance}%\n\n`
-    );
+  const store = await openStore(root);
+  try {
+    const hits = await (config(root).embedding
+      ? store.search({ query: question, collection: "journal", limit: 5 })
+      : store.searchLex(question, { collection: "journal", limit: 5 }));
+    const found = hits
+      .map((hit) => {
+        const id = hitId(hit);
+        return { entry: journal.get(id), score: Number(hit.score ?? 0) };
+      })
+      .filter((hit): hit is { entry: JournalEntry; score: number } =>
+        Boolean(hit.entry)
+      );
+    if (found.length === 0) {
+      reflectMiss();
+      return;
+    }
+    for (const hit of found) {
+      const relevance =
+        hit.score <= 1 ? Math.round(hit.score * 100) : Math.round(hit.score);
+      const outcome =
+        hit.entry.score === undefined
+          ? "(unresolved)"
+          : `score: ${hit.entry.score} — ${hit.entry.observation ?? ""}`;
+      process.stdout.write(
+        `${hit.entry.text}\n${outcome}\nrelevance: ${relevance}%\n\n`
+      );
+    }
+  } finally {
+    await store.close();
   }
 }
-function reward(args: string[]) {
+async function reward(args: string[]) {
   const [id, scoreText, observation] = args;
   if (!(id && scoreText !== undefined && observation !== undefined)) {
     fail("capn reward requires an id, score, and observation");
@@ -708,10 +678,10 @@ function reward(args: string[]) {
     rewardedAt: new Date().toISOString(),
     observation,
   });
-  updateQMDIfReady(root, config(root).embedding, true);
+  await syncIndex(root, config(root).embedding, true);
   process.stdout.write(`rewarded ${id} (${score})\n`);
 }
-function consolidate(args: string[]) {
+async function consolidate(args: string[]) {
   const root = findProjectRoot(process.cwd());
   const journal = readJournalEntries(root).sort((left, right) =>
     left.at.localeCompare(right.at)
@@ -723,7 +693,7 @@ function consolidate(args: string[]) {
       rmSync(journalPath(root, entry.id));
       count++;
     }
-    updateQMDIfReady(root);
+    await syncIndex(root);
     process.stdout.write(`cleared ${count} journal entries\n`);
     return;
   }
@@ -782,7 +752,7 @@ ${unresolved}
   writeFileSync(path, packet);
   process.stdout.write(`${path}\n`);
 }
-function bust(args: string[]) {
+async function bust(args: string[]) {
   const file = args[0];
   if (!file) {
     fail("capn bust requires a path");
@@ -797,11 +767,11 @@ function bust(args: string[]) {
   );
   const count = deleteEntries(root, ids);
   if (count > 0) {
-    updateQMDIfReady(root);
+    await syncIndex(root);
   }
   process.stdout.write(`busted ${count} entries\n`);
 }
-function deleteEntry(id: string) {
+async function deleteEntry(id: string) {
   if (!id) {
     fail("capn unchart requires an id");
   }
@@ -812,7 +782,7 @@ function deleteEntry(id: string) {
   }
   rmSync(path);
   writeMap(root);
-  updateQMDIfReady(root);
+  await syncIndex(root);
 }
 function formatEntry(entry: Entry) {
   const files = Object.keys(entry.files)
@@ -959,7 +929,7 @@ function installPostCommit(root: string) {
 function ensureGitignore(root: string) {
   const path = resolve(root, ".gitignore");
   const body = existsSync(path) ? readFileSync(path, "utf8") : "";
-  const managed = [".qmd/", ".capn/journal/", ".capn/MIND.md"];
+  const managed = [".capn/qmd/", ".capn/journal/", ".capn/MIND.md"];
   const lines =
     body.length === 0
       ? []
@@ -1000,91 +970,60 @@ function writeConfig(root: string, options: InitOptions) {
   );
   return embedding;
 }
-function init(args: string[]) {
+async function init(args: string[]) {
   const options = parseInitOptions(args);
   const root = findProjectRoot(process.cwd());
   ensureCapn(root);
   const embedding = writeConfig(root, options);
   ensureGitignore(root);
-  const qmd = requireQMD();
-  if (!existsSync(resolve(root, ".qmd"))) {
-    runQMD(root, ["init"], qmd);
-  }
-  const collectionList = runQMD(root, ["collection", "list"], qmd);
-  if (
-    !(collectionList.includes("qmd://capn/") || hasCapnCollection(root, qmd))
-  ) {
-    runQMD(
-      root,
-      ["collection", "add", entriesDir(root), "--name", "capn"],
-      qmd
-    );
-  }
-  if (
-    !(
-      collectionList.includes("qmd://journal/") ||
-      hasQMDCollection(root, "journal")
-    )
-  ) {
-    runQMD(
-      root,
-      ["collection", "add", journalDir(root), "--name", "journal"],
-      qmd
-    );
-  }
-  if (!journalExcludedFromDefaultScope(root)) {
-    runQMD(root, ["collection", "exclude", "journal"], qmd);
-  }
-  const contextList = runQMD(root, ["context", "list"], qmd);
-  if (
-    !contextList.includes(
-      "Charted discoveries: questions and where their answers live in this codebase"
-    )
-  ) {
-    runQMD(
-      root,
-      [
-        "context",
-        "add",
-        "qmd://capn",
-        "Charted discoveries: questions and where their answers live in this codebase",
-      ],
-      qmd
-    );
-  }
-  if (
-    !contextList.includes(
-      "Prediction journal: how the capn expected the user to respond, and what actually happened"
-    )
-  ) {
-    runQMD(
-      root,
-      [
-        "context",
-        "add",
-        "qmd://journal",
-        "Prediction journal: how the capn expected the user to respond, and what actually happened",
-      ],
-      qmd
-    );
-  }
-  installClaudeHooks(root);
-  installCodexHooks(root);
-  if (options.git) {
-    installPostCommit(root);
-  }
-  if (embedding) {
-    process.stdout.write(
-      "embedding enabled; qmd may download its model on first run\n"
-    );
-    runQMD(root, ["embed"], qmd);
+  const store = await openStore(root);
+  const capnContext =
+    "Charted discoveries: questions and where their answers live in this codebase";
+  const journalContext =
+    "Prediction journal: how the capn expected the user to respond, and what actually happened";
+  try {
+    const contexts = await store.listContexts();
+    if (
+      !contexts.some(
+        (context) =>
+          context.collection === "capn" &&
+          context.path === "/" &&
+          context.context === capnContext
+      )
+    ) {
+      await store.addContext("capn", "/", capnContext);
+    }
+    if (
+      !contexts.some(
+        (context) =>
+          context.collection === "journal" &&
+          context.path === "/" &&
+          context.context === journalContext
+      )
+    ) {
+      await store.addContext("journal", "/", journalContext);
+    }
+    installClaudeHooks(root);
+    installCodexHooks(root);
+    if (options.git) {
+      installPostCommit(root);
+    }
+    await store.update({});
+    if (embedding) {
+      process.stdout.write(
+        "embedding enabled; qmd may download its model on first run\n"
+      );
+      await store.embed({});
+    }
+  } finally {
+    await store.close();
   }
   writeMap(root);
   process.stdout.write(
     `capn initialized: storage, qmd capn and journal collections, hooks${options.git ? ", post-commit" : ""}\n`
   );
 }
-function main() {
+async function main() {
   const [command, ...args] = process.argv.slice(2);
   if (command === "--help" || command === "-h") {
     process.stdout.write(usage());
@@ -1095,23 +1034,23 @@ function main() {
     process.exit(1);
   }
   if (command === "chart") {
-    chart(args);
+    await chart(args);
   } else if (command === "ask") {
-    ask(args);
+    await ask(args);
   } else if (command === "reflect") {
-    reflect(args);
+    await reflect(args);
   } else if (command === "predict") {
-    predict(args);
+    await predict(args);
   } else if (command === "reward") {
-    reward(args);
+    await reward(args);
   } else if (command === "consolidate") {
-    consolidate(args);
+    await consolidate(args);
   } else if (command === "bust") {
-    bust(args);
+    await bust(args);
   } else if (command === "prune") {
-    prune();
+    await prune();
   } else if (command === "unchart") {
-    deleteEntry(args[0]);
+    await deleteEntry(args[0]);
   } else if (command === "list") {
     listEntries();
   } else if (command === "context") {
@@ -1119,10 +1058,10 @@ function main() {
   } else if (command === "nudge") {
     nudge();
   } else if (command === "init") {
-    init(args);
+    await init(args);
   } else {
     process.stdout.write(usage());
     process.exit(1);
   }
 }
-main();
+await main();

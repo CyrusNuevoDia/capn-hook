@@ -12,16 +12,16 @@ Capn Hook is dynamic memory for coding agents: chart discoveries as markdown ent
 
 | Path | What |
 | --- | --- |
-| `src/capn.ts` | The entire CLI. Single executable file, `#!/usr/bin/env bun`, zero npm imports at runtime (qmd is spawned as a binary, never imported) |
+| `src/capn.ts` | The entire CLI. Single executable file, `#!/usr/bin/env bun`, single runtime import: `@tobilu/qmd` (SDK), loaded lazily only by commands that touch the index |
 | `tests/capn.test.ts` | bun:test suite |
 | `tests/agent-e2e.sh` | Two-phase codex-in-the-loop E2E |
 | `tests/treasure-cove/` | Fixture codebase. Must never mention capn — agents under test learn only from `capn context` output |
-| `GOAL.md` | Cold-audit verifier (v0.3) |
+| `GOAL.md` | Cold-audit verifier (v0.4) |
 | `docs/shaping.md`, `docs/frame.md` | Design history (shaping method) |
 
 ## Conventions
 
-- Tests are **subprocess-only**: spawn the CLI (`Bun.spawnSync`) in mktemp dirs, assert on exit codes/stdout/files. Never import functions from `src/` in tests. Never touch the repo's own `.capn/`, `.claude/`, or `.qmd/` from tests.
+- Tests are **subprocess-only**: spawn the CLI (`Bun.spawnSync`) in mktemp dirs, assert on exit codes/stdout/files. Never import functions from `src/` in tests. Never touch the repo's own `.capn/`, `.claude/`, `.codex/`, or `.capn/qmd/` from tests.
 - Tests must pass on a machine with **no GGUF models**: init with `--no-embedding` (BM25). Embedding-path tests must `skipIf` models are absent.
 - Nudge tests need **fresh random session ids** — nudge markers persist in the OS tmpdir.
 - Chart entries use `chart`/`unchart` naming; the old `add`/`delete` commands are intentionally gone.
@@ -31,8 +31,9 @@ Capn Hook is dynamic memory for coding agents: chart discoveries as markdown ent
 ## Gotchas (learned the hard way)
 
 - `bun link` does NOT put the `capn` bin on PATH. Symlink the shebanged entrypoint instead: `ln -s "$PWD/src/capn.ts" <dir-on-PATH>/capn`.
-- qmd is sensitive to the inherited `PWD` env var, not just subprocess cwd — capn pins both to the project root when spawning qmd. Preserve that.
-- qmd project-local mode (`.qmd/` from `qmd init`) is what isolates projects; `QMD_CONFIG_DIR` shares one global sqlite and collides on collection names. Don't switch back.
+- capn's index state lives in `.capn/qmd/index.sqlite` — capn must never create a `.qmd/` at a host project's root; that dir belongs to the host's own qmd install (GOAL group X guards this).
+- Bun resolves `@tobilu/qmd` via the symlinked entrypoint's realpath, so the capn repo's node_modules is what loads — keep `bun install` fresh there. Bun silently auto-installs from its global cache if no node_modules is found; don't rely on it.
+- sqlite `-wal`/`-shm` files beside `index.sqlite` are normal; the sqlite is disposable — `capn init` rebuilds it from the markdown.
 - `.capn/journal/` and `.capn/MIND.md` are gitignored per-user memory — tests must not assume they're committed.
 - Sandboxed builders usually cannot write `.git` — don't attempt commits from a sandbox; the orchestrating session commits.
 - BM25 (`qmd search`) needs zero models; hybrid (`qmd query`) needs ~2GB of GGUF models, downloaded on first use and cached globally in `~/.cache/qmd/models`.
