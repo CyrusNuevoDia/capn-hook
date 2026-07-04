@@ -32,8 +32,7 @@ capn init --git      # also install a post-commit hook that prunes
 For source checkouts before a release, install dependencies and symlink the entrypoint:
 
 ```sh
-bun install
-ln -s "$PWD/src/capn.ts" ~/.local/bin/capn   # or any dir on your PATH
+just install        # or: CAPN_BIN_DIR=/some/path-on-PATH just install
 cd /path/to/your/project
 capn init            # .capn/, capn's QMD index, Claude Code hooks, and Codex hooks
 capn init --git      # also install a post-commit hook that prunes

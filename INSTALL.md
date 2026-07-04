@@ -30,11 +30,10 @@ If that clone location is already taken by a different checkout, or the human te
 ## 3. Build and link the CLI from source
 
 ```sh
-bun install
-ln -s "$PWD/src/capn.ts" ~/.local/bin/capn   # or any other dir on PATH
+just install        # or: CAPN_BIN_DIR=/some/path-on-PATH just install
 ```
 
-Requires [bun](https://bun.sh). Skip this source-link step if `npm install -g capn-hook` worked. Do not use `bun link` — it does not put `capn` on PATH; the symlink above is the only reliable source-checkout path.
+Requires [bun](https://bun.sh). Skip this source-link step if `npm install -g capn-hook` worked. Do not use `bun link` — it does not put `capn` on PATH; `just install` creates the reliable source-checkout symlink.
 
 Confirm it worked:
 

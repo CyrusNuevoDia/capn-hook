@@ -1,5 +1,29 @@
 set dotenv-load := true
 
+install:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    bun install
+
+    bin_dir="${CAPN_BIN_DIR:-$HOME/.local/bin}"
+    target="$bin_dir/capn"
+    mkdir -p "$bin_dir"
+
+    if [ -e "$target" ] && [ ! -L "$target" ]; then
+      echo "refusing to overwrite non-symlink: $target" >&2
+      echo "remove it or set CAPN_BIN_DIR=/some/path-on-PATH" >&2
+      exit 2
+    fi
+
+    ln -sfn "$PWD/src/capn.ts" "$target"
+    echo "installed capn -> $target"
+
+    case ":$PATH:" in
+      *":$bin_dir:"*) ;;
+      *) echo "warning: $bin_dir is not on PATH" >&2 ;;
+    esac
+
 fmt:
     bun x ultracite fix
 
