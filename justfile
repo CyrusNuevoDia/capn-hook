@@ -16,7 +16,7 @@ install:
       exit 2
     fi
 
-    ln -sfn "$PWD/src/capn.ts" "$target"
+    ln -sfn "$PWD/bin/capn" "$target"
     echo "installed capn -> $target"
 
     case ":$PATH:" in
@@ -32,5 +32,5 @@ check:
     bun test
 
 lint:
-    bun x @typescript/native-preview@beta --noEmit --pretty false --skipLibCheck --types bun --module esnext --moduleResolution bundler src/capn.ts tests/capn.test.ts
+    bun x @typescript/native-preview@beta --noEmit --pretty false --skipLibCheck --allowImportingTsExtensions --types bun --module esnext --moduleResolution bundler src/capn.ts src/run.ts tests/capn.test.ts
     bun x ultracite check

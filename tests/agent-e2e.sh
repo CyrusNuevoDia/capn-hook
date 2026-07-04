@@ -16,10 +16,10 @@ command -v codex >/dev/null || { echo "FAIL: codex CLI not on PATH"; exit 1; }
 command -v jq >/dev/null || { echo "FAIL: jq not on PATH"; exit 1; }
 command -v rg >/dev/null || { echo "FAIL: rg not on PATH"; exit 1; }
 command -v fd >/dev/null || { echo "FAIL: fd not on PATH"; exit 1; }
-test -x "$REPO/src/capn.ts" || { echo "FAIL: src/capn.ts missing or not executable"; exit 1; }
+test -x "$REPO/bin/capn" || { echo "FAIL: bin/capn missing or not executable"; exit 1; }
 
 BIN=$(mktemp -d)
-ln -s "$REPO/src/capn.ts" "$BIN/capn"
+ln -s "$REPO/bin/capn" "$BIN/capn"
 export PATH="$BIN:$PATH"
 
 WORK=$(mktemp -d)

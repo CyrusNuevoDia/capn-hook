@@ -1,0 +1,47 @@
+#!/usr/bin/env sh
+set -eu
+
+self=$0
+while [ -L "$self" ]; do
+  self_dir=$(CDPATH= cd -- "$(dirname -- "$self")" && pwd)
+  link=$(readlink "$self")
+  case "$link" in
+    /*) self=$link ;;
+    *) self=$self_dir/$link ;;
+  esac
+done
+
+bin_dir=$(CDPATH= cd -- "$(dirname -- "$self")" && pwd)
+package_dir=$(CDPATH= cd -- "$bin_dir/.." && pwd)
+if [ -f "$package_dir/dist/capn.js" ]; then
+  entry="$package_dir/dist/capn.js"
+else
+  entry="$package_dir/src/run.ts"
+fi
+
+case "${CAPN_RUNTIME:-}" in
+  bun)
+    exec bun "$entry" "$@"
+    ;;
+  node)
+    if [ "${entry##*.}" = "ts" ]; then
+      exec node --experimental-strip-types "$entry" "$@"
+    fi
+    exec node "$entry" "$@"
+    ;;
+  "")
+    ;;
+  *)
+    echo "CAPN_RUNTIME must be 'bun' or 'node'" >&2
+    exit 2
+    ;;
+esac
+
+if command -v bun >/dev/null 2>&1; then
+  exec bun "$entry" "$@"
+fi
+
+if [ "${entry##*.}" = "ts" ]; then
+  exec node --experimental-strip-types "$entry" "$@"
+fi
+exec node "$entry" "$@"

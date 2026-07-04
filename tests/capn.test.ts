@@ -13,9 +13,9 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { spawnSync } from "bun";
+import { execaSync } from "execa";
 
-const capnPath = resolve(import.meta.dir, "../src/capn.ts");
+const capnPath = resolve(import.meta.dir, "../bin/capn");
 const qmdPath = resolve(
   import.meta.dir,
   "../node_modules/@tobilu/qmd/dist/cli/qmd.js"
@@ -66,13 +66,12 @@ afterEach(() => {
 });
 
 function capn(args: string[] = [], input = "", cwd = workDir) {
-  return spawnSync({
-    cmd: [capnPath, ...args],
+  return execaSync(capnPath, args, {
     cwd,
     env: qmdEnv(cwd),
-    stdin: input ? Buffer.from(input) : undefined,
-    stdout: "pipe",
-    stderr: "pipe",
+    input: input || undefined,
+    reject: false,
+    stripFinalNewline: false,
   });
 }
 
@@ -91,12 +90,15 @@ function qmdEnv(cwd = workDir, env: Record<string, string> = {}) {
 }
 
 function run(cmd: string[], cwd = workDir, env: Record<string, string> = {}) {
-  return spawnSync({
-    cmd,
+  const [file, ...args] = cmd;
+  if (file === undefined) {
+    throw new Error("run requires a command");
+  }
+  return execaSync(file, args, {
     cwd,
-    stdout: "pipe",
-    stderr: "pipe",
     env: qmdEnv(cwd, env),
+    reject: false,
+    stripFinalNewline: false,
   });
 }
 

@@ -1,10 +1,9 @@
 import { readFile } from "node:fs/promises";
-import { spawnSync } from "bun";
+import { execaSync } from "execa";
 
 const packageName = "capn-hook";
 const releaseTypes = ["patch", "minor", "major"] as const;
 const changeStatuses = ["A", "C", "M", "R", "D"] as const;
-const textDecoder = new TextDecoder();
 const relativePathPrefixPattern = /^\.\//;
 const changesetReleaseLinePattern = /^"([^"]+)":\s*([A-Za-z0-9_-]+)\s*$/;
 
@@ -33,35 +32,31 @@ function fail(message: string): never {
 }
 
 function runGit(args: string[]): string {
-  const result = spawnSync({
-    cmd: ["git", ...args],
-    stderr: "pipe",
-    stdout: "pipe",
+  const result = execaSync("git", args, {
+    reject: false,
   });
 
   if (result.exitCode !== 0) {
     const command = ["git", ...args].join(" ");
-    const stderr = textDecoder.decode(result.stderr).trim();
+    const stderr = result.stderr.trim();
     const detail = stderr.length > 0 ? `\n${stderr}` : "";
 
     fail(`Git command failed: ${command}${detail}`);
   }
 
-  return textDecoder.decode(result.stdout).trimEnd();
+  return result.stdout.trimEnd();
 }
 
 function tryRunGit(args: string[]): string | undefined {
-  const result = spawnSync({
-    cmd: ["git", ...args],
-    stderr: "pipe",
-    stdout: "pipe",
+  const result = execaSync("git", args, {
+    reject: false,
   });
 
   if (result.exitCode !== 0) {
     return;
   }
 
-  return textDecoder.decode(result.stdout).trimEnd();
+  return result.stdout.trimEnd();
 }
 
 function normalizePath(filePath: string): string {

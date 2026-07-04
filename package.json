@@ -1,6 +1,7 @@
 {
   "dependencies": {
-    "@tobilu/qmd": "^2.5.3"
+    "@tobilu/qmd": "^2.5.3",
+    "execa": "^9.6.1"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.16",
@@ -12,10 +13,12 @@
   },
   "name": "capn-hook",
   "scripts": {
+    "build": "bun build src/run.ts --target=node --packages=external --outfile=dist/capn.js",
     "changeset": "changeset",
-    "test": "bun test",
     "check": "ultracite check",
-    "fix": "ultracite fix"
+    "fix": "ultracite fix",
+    "prepack": "bun run build",
+    "test": "bun test"
   },
   "type": "module",
   "version": "0.1.0",
@@ -40,6 +43,8 @@
   ],
   "packageManager": "bun@1.3.14",
   "files": [
+    "bin",
+    "dist",
     "src",
     "README.md",
     "INSTALL.md",
@@ -50,7 +55,7 @@
     "access": "public"
   },
   "bin": {
-    "capn": "./src/capn.ts"
+    "capn": "./bin/capn"
   },
   "trustedDependencies": [
     "node-llama-cpp",

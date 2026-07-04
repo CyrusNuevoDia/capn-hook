@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, relative, resolve, sep } from "node:path";
-import { spawnSync } from "bun";
+import { execaSync } from "execa";
 import { fail } from "./util.ts";
 
 function toPOSIXPath(path: string) {
@@ -8,15 +8,13 @@ function toPOSIXPath(path: string) {
 }
 
 function findGitRoot(start: string) {
-  const git = spawnSync({
-    cmd: ["git", "rev-parse", "--show-toplevel"],
+  const git = execaSync("git", ["rev-parse", "--show-toplevel"], {
     cwd: start,
     env: { ...process.env, PWD: start },
-    stdout: "pipe",
-    stderr: "pipe",
+    reject: false,
   });
   if (git.exitCode === 0) {
-    return git.stdout.toString().trim();
+    return git.stdout.trim();
   }
   return resolve(start);
 }

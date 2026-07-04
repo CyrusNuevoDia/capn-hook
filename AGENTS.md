@@ -12,7 +12,7 @@ Capn Hook is dynamic memory for coding agents: chart discoveries as markdown ent
 
 | Path | What |
 | --- | --- |
-| `src/capn.ts` | Shebanged CLI entrypoint and command dispatch |
+| `bin/capn`, `src/run.ts`, `src/capn.ts` | Executable launcher, runtime entrypoint, and command dispatch |
 | `src/commands.ts` | Command handlers and command-local helpers |
 | `src/{project,entries,journal,store,hooks,util}.ts` | Flat storage, project pathing, hook, QMD store, and utility modules |
 | `tests/capn.test.ts` | bun:test suite |
@@ -23,17 +23,17 @@ Capn Hook is dynamic memory for coding agents: chart discoveries as markdown ent
 
 ## Conventions
 
-- Tests are **subprocess-only**: spawn the CLI (`Bun.spawnSync`) in mktemp dirs, assert on exit codes/stdout/files. Never import functions from `src/` in tests. Never touch the repo's own `.capn/`, `.claude/`, `.codex/`, or `.capn/qmd/` from tests.
+- Tests are **subprocess-only**: spawn the CLI in mktemp dirs, assert on exit codes/stdout/files. Never import functions from `src/` in tests. Never touch the repo's own `.capn/`, `.claude/`, `.codex/`, or `.capn/qmd/` from tests.
 - Tests must pass on a machine with **no GGUF models**: init with `--no-embedding` (BM25). Embedding-path tests must `skipIf` models are absent.
 - Chart entries use `chart`/`unchart` naming; the old `add`/`delete` commands are intentionally gone.
 - Identifier naming: acronyms stay uppercase (`JSON`, `URL`, `DB`); the `Id` suffix stays mixed-case (`entryId`, `sessionId`).
-- Keep `src/` flat and lean — storage libs plus one `commands.ts`; no speculative options. The shebanged entrypoint stays `src/capn.ts` (GOAL bootstrap, `package.json#bin`, and the symlink recipe point at it). The `@tobilu/qmd` import stays dynamic inside `openStore`.
+- Keep `src/` flat and lean — storage libs plus one `commands.ts`; no speculative options. The executable package bin stays `bin/capn`; `src/capn.ts` stays importable command dispatch. The `@tobilu/qmd` import stays dynamic inside `openStore`.
 
 ## Gotchas (learned the hard way)
 
-- `bun link` does NOT put the `capn` bin on PATH. Symlink the shebanged entrypoint instead: `ln -s "$PWD/src/capn.ts" <dir-on-PATH>/capn`.
+- `bun link` does NOT put the `capn` bin on PATH. Symlink the launcher instead: `ln -s "$PWD/bin/capn" <dir-on-PATH>/capn`.
 - capn's index state lives in `.capn/qmd/index.sqlite` — capn must never create a `.qmd/` at a host project's root; that dir belongs to the host's own qmd install (GOAL group X guards this).
-- Bun resolves `@tobilu/qmd` via the symlinked entrypoint's realpath, so the capn repo's node_modules is what loads — keep `bun install` fresh there. Bun silently auto-installs from its global cache if no node_modules is found; don't rely on it.
+- The launcher resolves `src/run.ts` from its own realpath, so the capn repo's node_modules is what loads — keep `npm install` or `bun install` fresh there. Bun silently auto-installs from its global cache if no node_modules is found; don't rely on it.
 - sqlite `-wal`/`-shm` files beside `index.sqlite` are normal; the sqlite is disposable — `capn init` rebuilds it from the markdown.
 - The whole `.capn/` directory is gitignored local memory (`capn init` manages the line) — tests must not assume any of it is committed.
 - Sandboxed builders usually cannot write `.git` — don't attempt commits from a sandbox; the orchestrating session commits.
@@ -43,7 +43,8 @@ Capn Hook is dynamic memory for coding agents: chart discoveries as markdown ent
 ## Commands
 
 ```sh
-bun install              # deps (@tobilu/qmd; postinstalls build node-llama-cpp)
+npm install              # deps (@tobilu/qmd; postinstalls build node-llama-cpp)
+bun install              # equivalent Bun install path
 bun test                 # fast hermetic suite
 sh tests/agent-e2e.sh    # agent E2E — spawns codex twice, costs real LLM calls
 ```

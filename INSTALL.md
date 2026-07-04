@@ -18,6 +18,12 @@ Prefer the published npm package:
 npm install -g capn-hook
 ```
 
+Or install it with Bun:
+
+```sh
+bun install -g capn-hook
+```
+
 If npm does not have the needed version yet, use the source checkout:
 
 ```sh
@@ -33,7 +39,7 @@ If that clone location is already taken by a different checkout, or the human te
 just install        # or: CAPN_BIN_DIR=/some/path-on-PATH just install
 ```
 
-Requires [bun](https://bun.sh). Skip this source-link step if `npm install -g capn-hook` worked. Do not use `bun link` — it does not put `capn` on PATH; `just install` creates the reliable source-checkout symlink.
+Requires [bun](https://bun.sh). Skip this source-link step if `npm install -g capn-hook` or `bun install -g capn-hook` worked. Do not use `bun link` — it does not put `capn` on PATH; `just install` creates the reliable source-checkout symlink.
 
 Confirm it worked:
 

@@ -43,7 +43,7 @@ export async function openStore(root: string) {
   try {
     ({ createStore } = await import("@tobilu/qmd"));
   } catch {
-    fail("qmd SDK not available. Run bun install in the capn repo.\n");
+    fail("qmd SDK not available. Run npm install or bun install.\n");
   }
   mkdirSync(qmdDir(root), { recursive: true });
   return createStore({

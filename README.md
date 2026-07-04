@@ -20,14 +20,17 @@ The chart is chart or unchart only. Charting is exploration; uncharting is cache
 
 ## Install
 
-Requires [bun](https://bun.sh).
-
 ```sh
 npm install -g capn-hook
+# or
+bun install -g capn-hook
+
 cd /path/to/your/project
 capn init            # .capn/, capn's QMD index, Claude Code hooks, and Codex hooks
 capn init --git      # also install a post-commit hook that prunes
 ```
+
+The published CLI ships as JavaScript and runs under Bun when Bun is available, falling back to Node.js. Set `CAPN_RUNTIME=node` or `CAPN_RUNTIME=bun` to force one runtime.
 
 Prefer to delegate? Tell your coding agent to fetch and follow [INSTALL.md](https://github.com/CyrusNuevoDia/capn-hook/blob/main/INSTALL.md) — it's written for the agent to execute, not for you to copy by hand.
 
