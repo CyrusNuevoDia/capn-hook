@@ -7,7 +7,7 @@ export type Berth = {
 };
 
 export class HarborRegistry {
-  private berths: Berth[] = [];
+  private readonly berths: Berth[] = [];
 
   register(berth: Berth) {
     this.berths.push(berth);
