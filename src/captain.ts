@@ -337,7 +337,14 @@ function ask(args: string[]) {
   if (!hasCaptainCollection(root, qmd)) fail("captain recall is not initialized. Run captain init.\n");
   const command = config(root).embedding ? "query" : "search";
   const output = runQMD(root, [command, question, "-c", "captain", "-n", "5", "--format", "json"], qmd);
-  const hits = JSON.parse(output || "[]");
+  const jsonStart = output.search(/^\s*[\[{]/m);
+  const payload = jsonStart === -1 ? output : output.slice(jsonStart);
+  let hits;
+  try {
+    hits = JSON.parse(payload || "[]");
+  } catch {
+    fail(`could not parse qmd output: ${output.slice(0, 200)}`);
+  }
   const entries = new Map(readEntries(root).map((entry) => [entry.id, entry]));
   const found = hits
     .map((hit: { file?: string; score?: number }) => {
