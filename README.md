@@ -1,6 +1,8 @@
-# Capn Hook
+# Don’t grep the same mystery twice.
 
-Dynamic memory for coding agents. The agent charts discoveries as it explores a codebase — an index of questions and where their answers live — and future sessions ask the capn before re-exploring. When the underlying files change, the affected entries are deleted. A capn charting waters, built on hooks.
+Agent-discovered, human-readable Q&A route cache, backed by exact file hashes, add/delete only, auto-invalidated before use, with hooks that nudge the agent to chart only things it actually had to discover.
+
+**Code graphs know the code. Capn remembers the path the agent already paid to discover.**
 
 ## The problem
 
@@ -28,26 +30,26 @@ capn init --git      # also install a post-commit hook that prunes
 
 `capn init` wires up two Claude Code hooks:
 
-| Hook | Command | Effect |
-| --- | --- | --- |
-| SessionStart | `capn context` | Inject the ask-first charting contract |
-| Stop | `capn nudge` | Once per session, ask the agent to chart discoveries before stopping |
+| Hook         | Command        | Effect                                                               |
+| ------------ | -------------- | -------------------------------------------------------------------- |
+| SessionStart | `capn context` | Inject the ask-first charting contract                               |
+| Stop         | `capn nudge`   | Once per session, ask the agent to chart discoveries before stopping |
 
 Embedding is on by default. `capn init` runs QMD setup and, when embedding is enabled, `qmd embed`; the first embed model download is about 300MB, and the full hybrid query pipeline may download about 2GB total on first use. A cold `capn ask` with hybrid search can take a few seconds once the models are present. For deterministic or lightweight projects, use `capn init --no-embedding` to use BM25 search only.
 
 ## Commands
 
-| Command | Description |
-| --- | --- |
-| `capn add "<question>" "<answer>" --files <a,b>` | Chart a route. Hashes each file; re-adding a question replaces the old entry (delete + add) |
-| `capn ask "<question>"` | Recall relevant charted answers after deleting any stale entries first |
-| `capn bust <path>` | Delete every entry backed by one file |
-| `capn prune` | Delete every entry whose files changed or vanished |
-| `capn list` | Print charted entries, human-readable |
-| `capn delete <id>` | Manually cache-bust one entry |
-| `capn context` | Print the ask-first charting contract (used by the SessionStart hook) |
-| `capn nudge` | Stop-hook handler; blocks once per session with a reminder to chart |
-| `capn init [--git] [--embedding\|--no-embedding]` | Set up `.capn/`, `.qmd/`, QMD registration, and hooks in a project |
+| Command                                           | Description                                                                                 |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `capn add "<question>" "<answer>" --files <a,b>`  | Chart a route. Hashes each file; re-adding a question replaces the old entry (delete + add) |
+| `capn ask "<question>"`                           | Recall relevant charted answers after deleting any stale entries first                      |
+| `capn bust <path>`                                | Delete every entry backed by one file                                                       |
+| `capn prune`                                      | Delete every entry whose files changed or vanished                                          |
+| `capn list`                                       | Print charted entries, human-readable                                                       |
+| `capn delete <id>`                                | Manually cache-bust one entry                                                               |
+| `capn context`                                    | Print the ask-first charting contract (used by the SessionStart hook)                       |
+| `capn nudge`                                      | Stop-hook handler; blocks once per session with a reminder to chart                         |
+| `capn init [--git] [--embedding\|--no-embedding]` | Set up `.capn/`, `.qmd/`, QMD registration, and hooks in a project                          |
 
 ## The chart
 
@@ -61,6 +63,7 @@ at: 2026-07-03T18:00:00.000Z
 files:
   src/api/webhooks.ts: 2f4c0b9c3e0a0c7b5d5d7f8f0a6e2d1c4b8a6f1e2d3c4b5a6978877665544332
 ---
+
 # Where are payment webhooks handled?
 
 Router in src/api/webhooks.ts; per-event handlers in src/billing/handlers/.
