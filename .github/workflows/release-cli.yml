@@ -1,0 +1,168 @@
+name: release-cli
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: release-cli-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  NODE_VERSION: "24"
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      check_changeset: ${{ steps.detect.outputs.check_changeset }}
+      release: ${{ steps.detect.outputs.release }}
+    steps:
+      - uses: actions/checkout@v6
+        name: checkout
+        with:
+          fetch-depth: 0
+      - id: detect
+        name: detect
+        run: |
+          changed_files="$(mktemp)"
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+            head="${{ github.event.pull_request.head.sha }}"
+          else
+            base="${{ github.event.before }}"
+            head="${{ github.sha }}"
+          fi
+
+          if [ -z "$base" ] || [ -z "${base//0/}" ]; then
+            git diff-tree --no-commit-id --name-only -r "$head" > "$changed_files"
+          else
+            git diff --name-only "$base" "$head" > "$changed_files"
+          fi
+
+          check_changeset=false
+          release=false
+
+          while IFS= read -r file; do
+            case "$file" in
+              src/*|package.json|bun.lock|README.md|INSTALL.md|GOAL.md|CHANGELOG.md|justfile|.changeset/*.md|scripts/check-release-changeset.ts|.github/workflows/*)
+                check_changeset=true
+                ;;
+            esac
+
+            case "$file" in
+              .changeset/*.md|package.json|bun.lock|CHANGELOG.md|.github/workflows/release-cli.yml)
+                release=true
+                ;;
+            esac
+          done < "$changed_files"
+
+          {
+            echo "check_changeset=$check_changeset"
+            echo "release=$release"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Changed files:"
+          sed 's/^/- /' "$changed_files"
+
+  changeset:
+    if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.check_changeset == 'true' }}
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        name: checkout
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        name: setup[bun]
+        with:
+          bun-version-file: package.json
+      - name: check
+        run: bun scripts/check-release-changeset.ts
+
+  release:
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.release == 'true' }}
+    needs: changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        name: checkout
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        name: setup[bun]
+        with:
+          bun-version-file: package.json
+      - uses: actions/setup-node@v6
+        name: setup[node]
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: extractions/setup-just@v4
+        name: setup[just]
+        with:
+          just-version: "1.40.0"
+      - name: setup[npm]
+        run: |
+          mkdir -p "$RUNNER_TEMP/npm-wrapper"
+          cat > "$RUNNER_TEMP/npm-wrapper/npm" <<'SCRIPT'
+          #!/usr/bin/env bash
+          exec bunx --bun npm@latest "$@"
+          SCRIPT
+          chmod +x "$RUNNER_TEMP/npm-wrapper/npm"
+          echo "$RUNNER_TEMP/npm-wrapper" >> "$GITHUB_PATH"
+          npm --version
+      - name: deps
+        run: bun install --frozen-lockfile
+      - name: check
+        run: just check
+      - name: version
+        run: |
+          if ! compgen -G ".changeset/*.md" > /dev/null; then
+            echo "No changesets present; package is already versioned."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          bun changeset version
+          bun install --lockfile-only
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "changeset version produced no changes; nothing to commit."
+            exit 0
+          fi
+
+          git commit -m "chore(release): bump capn-hook version"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+      - id: publish
+        name: publish
+        run: |
+          version="$(jq -r '.version' package.json)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          if npm view "capn-hook@$version" version >/dev/null 2>&1; then
+            echo "capn-hook@$version is already published; skipping."
+            echo "published=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          npm pack --dry-run --json
+          bun changeset publish
+          release_version="capn-hook@$version"
+          if ! git rev-parse "$release_version" >/dev/null 2>&1; then
+            git tag "$release_version"
+          fi
+          echo "published=true" >> "$GITHUB_OUTPUT"
+          git push origin --tags || echo "::warning::Failed to push git tags for the published release."

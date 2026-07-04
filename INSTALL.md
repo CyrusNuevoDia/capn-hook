@@ -10,7 +10,15 @@ command -v capn
 
 If this prints a path, skip to step 4 — capn-hook is already installed on this machine, you just need to wire it into the current project.
 
-## 2. Get the source
+## 2. Install the CLI
+
+Prefer the published npm package:
+
+```sh
+npm install -g capn-hook
+```
+
+If npm does not have the needed version yet, use the source checkout:
 
 ```sh
 git clone https://github.com/CyrusNuevoDia/capn-hook ~/.local/share/capn-hook
@@ -19,14 +27,14 @@ cd ~/.local/share/capn-hook
 
 If that clone location is already taken by a different checkout, or the human tells you capn-hook lives somewhere else on this machine, `cd` there instead of cloning.
 
-## 3. Build and link the CLI
+## 3. Build and link the CLI from source
 
 ```sh
 bun install
 ln -s "$PWD/src/capn.ts" ~/.local/bin/capn   # or any other dir on PATH
 ```
 
-Requires [bun](https://bun.sh). Do not use `bun link` — it does not put `capn` on PATH; the symlink above is the only reliable way.
+Requires [bun](https://bun.sh). Skip this source-link step if `npm install -g capn-hook` worked. Do not use `bun link` — it does not put `capn` on PATH; the symlink above is the only reliable source-checkout path.
 
 Confirm it worked:
 
@@ -39,7 +47,7 @@ command -v capn
 `cd` back to the project you're actually installing capn-hook into (not the capn-hook checkout), then:
 
 ```sh
-capn init            # sets up .capn/, .qmd/, Claude Code hooks, and Codex hooks
+capn init            # sets up .capn/, capn's QMD index, Claude Code hooks, and Codex hooks
 capn init --git      # same, plus a post-commit hook that prunes stale entries
 ```
 
@@ -59,6 +67,6 @@ should print the ask-first charting contract. Also check that:
 
 - `.claude/settings.local.json` in the target project now has `SessionStart → capn context` and `Stop → capn nudge` hooks
 - `.codex/hooks.json` in the target project now has `SessionStart → capn context` and `Stop → capn nudge` hooks
-- `.capn/` and `.qmd/` exist in the target project and are gitignored
+- `.capn/` exists in the target project and capn's generated `.capn/qmd/` state is gitignored
 
 capn-hook is now live in this project. See [README.md](README.md) for the full command reference (`capn ask`, `capn chart`, `capn reflect`, `capn predict`, `capn reward`, `capn consolidate`, ...).
