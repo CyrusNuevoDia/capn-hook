@@ -87,6 +87,15 @@ Router in src/api/webhooks.ts; per-event handlers in src/billing/handlers/.
 - **Agent-agnostic core.** The CLI and chart format know nothing about Claude Code; the hooks are a thin adapter. Other agents integrate by calling the same CLI.
 - **Local-first recall.** QMD is project-local. A future latency path could keep `qmd mcp --http --daemon` warm, but the v0.2 contract does not require a daemon.
 
+## Testing
+
+```sh
+bun test                 # subprocess-only suite; hermetic (BM25, no models)
+sh tests/agent-e2e.sh    # two-phase agent-in-the-loop E2E (spawns codex twice)
+```
+
+The unit suite drives the CLI strictly as a subprocess in temp dirs. The E2E drops two cold agents into [tests/treasure-cove/](tests/treasure-cove/): phase A must learn charting from the injected contract alone; phase B must answer by asking the captain instead of re-exploring.
+
 ## Status
 
-Shaped and specified; implementation is test-driven against [GOAL.md](GOAL.md) v0.2. See [docs/shaping.md](docs/shaping.md) for the design history.
+v0.2 implemented and verified: unit suite green, two-phase agent E2E passing. [GOAL.md](GOAL.md) is the standing cold-audit verifier; [docs/shaping.md](docs/shaping.md) has the design history. Agent-facing repo conventions live in [AGENTS.md](AGENTS.md).
