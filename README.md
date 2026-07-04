@@ -1,4 +1,6 @@
-# 🧢n🪝 Don’t grep the same mystery twice.
+# 🧢🪝 cap'n hook
+
+*Don’t grep the same mystery twice.*
 
 Agent-discovered, human-readable Q&A route cache, backed by exact file hashes, chart/unchart only, auto-invalidated before use.
 
