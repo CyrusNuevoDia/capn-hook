@@ -12,7 +12,7 @@ cd "$REPO" && bun install
 BIN=$(mktemp -d) && ln -s "$REPO/src/capn.ts" "$BIN/capn" && export PATH="$BIN:$PATH"
 ```
 
-Per condition group, work in a fresh `WORK=$(mktemp -d)` with a couple of committed fixture files (`git init` + commit), run `capn init --no-embedding` there unless the condition says otherwise. Never touch the repo's own `.capn/`, `.claude/`, or `.qmd/`. Nudge conditions need fresh random session ids (markers persist in the OS tmpdir).
+Per condition group, work in a fresh `WORK=$(mktemp -d)` with a couple of committed fixture files (`git init` + commit), run `capn init --no-embedding` there unless the condition says otherwise. Never touch the repo's own `.capn/`, `.claude/`, `.codex/`, or `.qmd/`. Nudge conditions need fresh random session ids (markers persist in the OS tmpdir).
 
 Environment notes: hybrid conditions (K4) are Required on machines with GGUF models cached in `~/.cache/qmd/models`, otherwise SKIP with a note. Group E needs the codex CLI with available credits; without it the overall verdict is INCOMPLETE, not PASS.
 
@@ -86,8 +86,9 @@ Environment notes: hybrid conditions (K4) are Required on machines with GGUF mod
 - **I2** `--no-embedding` → `{"embedding": false}`; `--embedding` flips it back; entries and hooks survive toggling.
 - **I3** `.qmd/index.yml` registers both `capn` → `.capn/entries` and `journal` → `.capn/journal`.
 - **I4** `.gitignore` contains each of `.qmd/`, `.capn/journal/`, `.capn/MIND.md` exactly once.
-- **I5** `.claude/settings.json` wires SessionStart → `capn context` and Stop → `capn nudge`, preserving any pre-existing settings and hooks, without duplicates on re-run.
-- **I6** `capn init --git` installs a post-commit hook that runs `capn prune`.
+- **I5** `.claude/settings.local.json` wires SessionStart → `capn context` and Stop → `capn nudge`, preserving any pre-existing local settings and hooks, without duplicates on re-run. `.claude/settings.json` is not rewritten for capn hook installation.
+- **I6** `.codex/hooks.json` wires SessionStart → `capn context` and Stop → `capn nudge`, preserving any pre-existing hooks, without duplicates on re-run.
+- **I7** `capn init --git` installs a post-commit hook that runs `capn prune`.
 
 ## E — Agent-in-the-loop E2E (needs codex CLI + credits)
 

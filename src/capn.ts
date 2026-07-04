@@ -32,9 +32,9 @@ type JournalEntry = {
   observation?: string;
 };
 type CapnMap = Record<string, { hash: string; entries: string[] }>;
-type ClaudeHook = { command?: string; type?: string };
-type ClaudeHookGroup = { hooks?: ClaudeHook[] };
-type ClaudeSettings = { hooks?: Record<string, ClaudeHookGroup[]> };
+type CommandHook = { command?: string; type?: string };
+type HookGroup = { hooks?: CommandHook[] };
+type HookConfig = { hooks?: Record<string, HookGroup[]> };
 type InitOptions = { embedding?: boolean; git: boolean };
 type QMDHit = { file?: string; score?: number };
 const noChartedAnswer = (question: string) =>
@@ -891,8 +891,8 @@ function nudge() {
     })
   );
 }
-function hookCommands(settings: ClaudeSettings, event: string) {
-  const groups = settings?.hooks?.[event];
+function hookCommands(config: HookConfig, event: string) {
+  const groups = config?.hooks?.[event];
   if (!Array.isArray(groups)) {
     return [];
   }
@@ -904,33 +904,41 @@ function hookCommands(settings: ClaudeSettings, event: string) {
       : []
   );
 }
-function addClaudeHook(
-  settings: ClaudeSettings,
-  event: string,
-  command: string
-) {
-  settings.hooks ??= {};
-  settings.hooks[event] ??= [];
+function addCommandHook(config: HookConfig, event: string, command: string) {
+  config.hooks ??= {};
+  config.hooks[event] ??= [];
   if (
-    hookCommands(settings, event).some((existing) => existing.includes("capn "))
+    hookCommands(config, event).some((existing) => existing.includes("capn "))
   ) {
     return;
   }
-  settings.hooks[event].push({
+  config.hooks[event].push({
     hooks: [{ type: "command", command }],
   });
 }
 function installClaudeHooks(root: string) {
   const claudeDir = resolve(root, ".claude");
-  const settingsPath = resolve(claudeDir, "settings.json");
+  const settingsPath = resolve(claudeDir, "settings.local.json");
   mkdirSync(claudeDir, { recursive: true });
-  let settings: ClaudeSettings = {};
+  let settings: HookConfig = {};
   if (existsSync(settingsPath)) {
     settings = JSON.parse(readFileSync(settingsPath, "utf8"));
   }
-  addClaudeHook(settings, "SessionStart", "capn context");
-  addClaudeHook(settings, "Stop", "capn nudge");
+  addCommandHook(settings, "SessionStart", "capn context");
+  addCommandHook(settings, "Stop", "capn nudge");
   writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
+}
+function installCodexHooks(root: string) {
+  const codexDir = resolve(root, ".codex");
+  const hooksPath = resolve(codexDir, "hooks.json");
+  mkdirSync(codexDir, { recursive: true });
+  let hooks: HookConfig = {};
+  if (existsSync(hooksPath)) {
+    hooks = JSON.parse(readFileSync(hooksPath, "utf8"));
+  }
+  addCommandHook(hooks, "SessionStart", "capn context");
+  addCommandHook(hooks, "Stop", "capn nudge");
+  writeFileSync(hooksPath, `${JSON.stringify(hooks, null, 2)}\n`);
 }
 function installPostCommit(root: string) {
   const hookPath = resolve(root, ".git/hooks/post-commit");
@@ -1061,6 +1069,7 @@ function init(args: string[]) {
     );
   }
   installClaudeHooks(root);
+  installCodexHooks(root);
   if (options.git) {
     installPostCommit(root);
   }

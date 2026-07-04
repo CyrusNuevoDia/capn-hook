@@ -18,22 +18,26 @@ The chart is chart or unchart only. Charting is exploration; uncharting is cache
 
 ## Install
 
+Onboarding a new project? Paste [INSTALL.md](INSTALL.md) into your coding agent and tell it to install capn-hook here — it's written for the agent to execute, not for you to copy by hand.
+
 Requires [bun](https://bun.sh). This repo depends on `@tobilu/qmd`; install dependencies before linking the CLI:
 
 ```sh
 bun install
 ln -s "$PWD/src/capn.ts" ~/.local/bin/capn   # or any dir on your PATH
 cd /path/to/your/project
-capn init            # .capn/, .qmd/, and Claude Code hooks
+capn init            # .capn/, .qmd/, Claude Code hooks, and Codex hooks
 capn init --git      # also install a post-commit hook that prunes
 ```
 
-`capn init` wires up two Claude Code hooks:
+`capn init` wires up two hooks for both Claude Code and Codex:
 
-| Hook         | Command        | Effect                                                               |
-| ------------ | -------------- | -------------------------------------------------------------------- |
-| SessionStart | `capn context` | Inject the ask-first charting contract                               |
-| Stop         | `capn nudge`   | Once per session, ask the agent to chart discoveries before stopping |
+| Agent       | File                          | Hook         | Command        | Effect                                                               |
+| ----------- | ----------------------------- | ------------ | -------------- | -------------------------------------------------------------------- |
+| Claude Code | `.claude/settings.local.json` | SessionStart | `capn context` | Inject the ask-first charting contract                               |
+| Claude Code | `.claude/settings.local.json` | Stop         | `capn nudge`   | Once per session, ask the agent to chart discoveries before stopping |
+| Codex       | `.codex/hooks.json`           | SessionStart | `capn context` | Inject the ask-first charting contract                               |
+| Codex       | `.codex/hooks.json`           | Stop         | `capn nudge`   | Once per session, ask the agent to chart discoveries before stopping |
 
 Embedding is on by default. `capn init` runs QMD setup and, when embedding is enabled, `qmd embed`; the first embed model download is about 300MB, and the full hybrid query pipeline may download about 2GB total on first use. A cold `capn ask` with hybrid search can take a few seconds once the models are present. For deterministic or lightweight projects, use `capn init --no-embedding` to use BM25 search only.
 

@@ -669,7 +669,7 @@ test("nudge blocks once per session unless a stop hook is already active", () =>
   expect(active.stdout.toString()).toBe("");
 });
 
-test("init is idempotent and installs QMD, Claude hooks, gitignore, config, and post-commit pruning", () => {
+test("init is idempotent and installs QMD, Claude/Codex hooks, gitignore, config, and post-commit pruning", () => {
   expect(run(["git", "init", "-q"]).exitCode).toBe(0);
   expect(run(["git", "config", "user.email", "t@t.co"]).exitCode).toBe(0);
   expect(run(["git", "config", "user.name", "t"]).exitCode).toBe(0);
@@ -677,10 +677,23 @@ test("init is idempotent and installs QMD, Claude hooks, gitignore, config, and 
   mkdirSync(join(workDir, ".claude"), { recursive: true });
   writeFileSync(
     join(workDir, ".claude/settings.json"),
+    JSON.stringify({ model: "sonnet" })
+  );
+  writeFileSync(
+    join(workDir, ".claude/settings.local.json"),
     JSON.stringify({
-      model: "sonnet",
+      statusLine: { type: "command", command: "echo status" },
       hooks: {
         Stop: [{ hooks: [{ type: "command", command: "echo old" }] }],
+      },
+    })
+  );
+  mkdirSync(join(workDir, ".codex"), { recursive: true });
+  writeFileSync(
+    join(workDir, ".codex/hooks.json"),
+    JSON.stringify({
+      hooks: {
+        Stop: [{ hooks: [{ type: "command", command: "echo codex old" }] }],
       },
     })
   );
@@ -713,8 +726,11 @@ test("init is idempotent and installs QMD, Claude hooks, gitignore, config, and 
   expect(qmdIndex).toContain("  journal:");
   expect(qmdIndex).toContain("includeByDefault: false");
 
-  const settings = readJSON(join(workDir, ".claude/settings.json"));
-  expect(settings.model).toBe("sonnet");
+  expect(readJSON(join(workDir, ".claude/settings.json"))).toEqual({
+    model: "sonnet",
+  });
+  const settings = readJSON(join(workDir, ".claude/settings.local.json"));
+  const codexHooks = readJSON(join(workDir, ".codex/hooks.json"));
   const sessionCommands = settings.hooks.SessionStart.flatMap(
     (group: { hooks: { command: string }[] }) =>
       group.hooks.map((hook) => hook.command)
@@ -730,6 +746,26 @@ test("init is idempotent and installs QMD, Claude hooks, gitignore, config, and 
     stopCommands.filter((command: string) => command === "capn nudge")
   ).toHaveLength(1);
   expect(stopCommands).toContain("echo old");
+  expect(settings.model).toBeUndefined();
+  expect(settings.statusLine).toEqual({
+    type: "command",
+    command: "echo status",
+  });
+  const codexSessionCommands = codexHooks.hooks.SessionStart.flatMap(
+    (group: { hooks: { command: string }[] }) =>
+      group.hooks.map((hook) => hook.command)
+  );
+  const codexStopCommands = codexHooks.hooks.Stop.flatMap(
+    (group: { hooks: { command: string }[] }) =>
+      group.hooks.map((hook) => hook.command)
+  );
+  expect(
+    codexSessionCommands.filter((command: string) => command === "capn context")
+  ).toHaveLength(1);
+  expect(
+    codexStopCommands.filter((command: string) => command === "capn nudge")
+  ).toHaveLength(1);
+  expect(codexStopCommands).toContain("echo codex old");
 
   const postCommit = readFileSync(
     join(workDir, ".git/hooks/post-commit"),
