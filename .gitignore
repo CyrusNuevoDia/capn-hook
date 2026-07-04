@@ -1,5 +1,4 @@
 node_modules/
 .qmd/
-.capn/qmd/
-.capn/journal/
-.capn/MIND.md
+.capn/
+.codex/

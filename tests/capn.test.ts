@@ -697,6 +697,10 @@ test("init is idempotent and installs QMD SDK storage, hooks, gitignore, config,
       },
     })
   );
+  writeFileSync(
+    join(workDir, ".gitignore"),
+    "dist/\n.capn/qmd/\n.capn/journal/\n.capn/MIND.md\n"
+  );
 
   const first = capn(["init", "--git", "--no-embedding"]);
   expect(first.exitCode, first.stderr.toString()).toBe(0);
@@ -714,16 +718,18 @@ test("init is idempotent and installs QMD SDK storage, hooks, gitignore, config,
     join(workDir, ".gitignore"),
     "utf8"
   ).split("\n");
+  expect(gitignoreLines.filter((line) => line === "dist/")).toHaveLength(1);
+  expect(gitignoreLines.filter((line) => line === ".capn/")).toHaveLength(1);
   expect(gitignoreLines.filter((line) => line === ".capn/qmd/")).toHaveLength(
-    1
+    0
   );
   expect(gitignoreLines.filter((line) => line === ".qmd/")).toHaveLength(0);
   expect(
     gitignoreLines.filter((line) => line === ".capn/journal/")
-  ).toHaveLength(1);
+  ).toHaveLength(0);
   expect(
     gitignoreLines.filter((line) => line === ".capn/MIND.md")
-  ).toHaveLength(1);
+  ).toHaveLength(0);
 
   expect(readJSON(join(workDir, ".claude/settings.json"))).toEqual({
     model: "sonnet",

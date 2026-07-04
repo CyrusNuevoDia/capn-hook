@@ -962,14 +962,17 @@ function installPostCommit(root: string) {
 function ensureGitignore(root: string) {
   const path = resolve(root, ".gitignore");
   const body = existsSync(path) ? readFileSync(path, "utf8") : "";
-  const managed = [".capn/qmd/", ".capn/journal/", ".capn/MIND.md"];
+  const staleManaged = [".capn/qmd/", ".capn/journal/", ".capn/MIND.md"];
+  const managed = [".capn/"];
   const lines =
     body.length === 0
       ? []
       : body
           .replace(trailingNewlinePattern, "")
           .split("\n")
-          .filter((line) => !managed.includes(line));
+          .filter(
+            (line) => !(managed.includes(line) || staleManaged.includes(line))
+          );
   lines.push(...managed);
   writeFileSync(path, `${lines.join("\n")}\n`);
 }

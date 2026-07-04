@@ -84,7 +84,7 @@ Environment notes: hybrid conditions (K4) are Required on machines with GGUF mod
 - **I1** Idempotent: running `capn init --no-embedding` twice produces no duplicate hooks or gitignore lines, and charting + asking still works after the second run.
 - **I2** `--no-embedding` → `{"embedding": false}`; `--embedding` flips it back; entries and hooks survive toggling.
 - **I3** After init, `.capn/qmd/index.sqlite` exists. No `.qmd/` directory is created.
-- **I4** `.gitignore` contains each of `.capn/qmd/`, `.capn/journal/`, `.capn/MIND.md` exactly once, and init never adds a `.qmd/` line.
+- **I4** `.gitignore` contains `.capn/` exactly once, removes older managed `.capn/qmd/`, `.capn/journal/`, and `.capn/MIND.md` lines on re-run, and init never adds a `.qmd/` line.
 - **I5** `.claude/settings.local.json` wires SessionStart with exec-form `command: "/usr/bin/env"` and `args: ["capn","context"]` (and nothing else capn-related), preserving any pre-existing local settings and hooks, without duplicates on re-run. `.claude/settings.json` is not rewritten for capn hook installation.
 - **I6** `.codex/hooks.json` wires SessionStart with exec-form `command: "/usr/bin/env"` and `args: ["capn","context"]` (and nothing else capn-related), preserving any pre-existing hooks, without duplicates on re-run.
 - **I7** `capn init --git` installs a post-commit hook that runs `capn prune`.
