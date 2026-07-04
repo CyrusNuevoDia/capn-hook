@@ -69,7 +69,7 @@ Same as A, plus the Stop hook blocks completion once per session asking the agen
 
 ## Decision
 
-**Selected: C** (A plus the Stop-hook nudge and git-hook pruning). Locked with the user 2026-07-03:
+**Selected: C** (A plus the Stop-hook nudge and git-hook pruning). Locked with the user 2026-07-03 as the v0.1 baseline:
 
 - Recording reinforcement: Stop-hook nudge, once per session (C2)
 - Runtime: Bun + TypeScript, single-file CLI, zero deps
@@ -77,17 +77,35 @@ Same as A, plus the Stop hook blocks completion once per session asking the agen
 - Prune triggers: SessionStart (before injection), `captain prune` manually, and opt-in git post-commit hook (C3)
 - Recall: prune + full-map dump into context at SessionStart (per-prompt matching deferred; see B)
 
-Implementation is verifier-first: [../GOAL.md](../GOAL.md) encodes these decisions as runnable pass/fail conditions; the build happens TDD-style in a separate /goal session against it.
+### v0.2 decision (2026-07-03)
+
+QMD is selected as the Shape B recall mechanism ahead of schedule, per user direction. The Stop-hook nudge and git-hook pruning stay from Shape C; recall changes from SessionStart map dump to on-demand `captain ask`.
+
+| Part | Decision                                                                                     | Flag |
+| ---- | --------------------------------------------------------------------------------------------- | :--: |
+| D1   | Storage pivots to markdown-per-entry in `.captain/entries/` for human browsability + QMD indexing | 🟡  |
+| D2   | `.captain/map.json` becomes a derived reverse index (`file -> entries`) for O(1) file busting | 🟡  |
+| D3   | `captain ask` recalls via hybrid `qmd query`; `captain init --no-embedding` uses BM25 `qmd search` | 🟡  |
+| D4   | SessionStart prints only the fixed ask-first contract; it does not dump entries or prune      | 🟡  |
+| D5   | New commands: `ask`, `bust`; `init` gains `--embedding` / `--no-embedding`                    | 🟡  |
+| D6   | Runtime adds the `@tobilu/qmd` dependency; JSONL is dropped with no migration path because no users exist yet | 🟡  |
+
+Implementation is verifier-first: [../GOAL.md](../GOAL.md) v0.2 encodes these decisions as runnable pass/fail conditions; the build happens TDD-style in a separate /goal session against it.
 
 ## Detail C: Affordances
 
-| Affordance        | Kind   | Mechanism                                                                              |
-| ----------------- | ------ | --------------------------------------------------------------------------------------- |
-| `captain add`     | CLI    | `captain add "<q>" "<a>" --files a,b` → sha256 each file, replace same-id entry, append |
-| `captain prune`   | CLI    | Re-hash all referenced files; delete entries with any mismatch/missing file             |
-| `captain list`    | CLI    | Human-readable map dump                                                                  |
-| `captain delete`  | CLI    | Manual cache-bust by entry id                                                            |
-| `captain context` | Hook   | SessionStart: prune, then print map + charting contract to stdout (→ agent context)      |
-| `captain nudge`   | Hook   | Stop: block once per session (marker in tmpdir keyed by session_id; respects stop_hook_active) |
-| `captain init`    | CLI    | Create `.captain/`, merge SessionStart+Stop hooks into `.claude/settings.json`; `--git` installs post-commit prune |
-| `.captain/map.jsonl` | Store | One JSON entry per line: `{id, q, a, files: [{path, hash}], at}`; paths relative to project root |
+| Affordance             | Kind   | Mechanism                                                                                         | Flag |
+| ---------------------- | ------ | -------------------------------------------------------------------------------------------------- | :--: |
+| `captain add`          | CLI    | Write/replace `.captain/entries/<id>.md`, update `.captain/map.json`, then run `qmd update` (+ embed when enabled) | 🟡  |
+| `captain ask`          | CLI    | Verify hashes first, delete stale entries, then recall with `qmd query` or BM25 `qmd search`       | 🟡  |
+| `captain bust`         | CLI    | Delete every entry referenced by one file path via `.captain/map.json`; exit 0 even on no-op       | 🟡  |
+| `captain prune`        | CLI    | Re-hash all referenced files; delete stale entry files, rebuild map, and run `qmd update` only when needed | 🟡  |
+| `captain list`         | CLI    | Human-readable dump from markdown entry files                                                       |      |
+| `captain delete`       | CLI    | Manual cache-bust by entry id                                                                       |      |
+| `captain context`      | Hook   | SessionStart: print only the fixed ask-first charting contract to stdout (→ agent context)          | 🟡  |
+| `captain nudge`        | Hook   | Stop: block once per session (marker in tmpdir keyed by session_id; respects stop_hook_active)      |      |
+| `captain init`         | CLI    | Create `.captain/entries/`, `.qmd/`, QMD collection/context registration, hooks, config, optional post-commit prune | 🟡  |
+| `.captain/entries/*.md` | Store | One markdown entry per question: frontmatter `{captain, id, at, files}` plus `# question` and answer body | 🟡  |
+| `.captain/map.json`    | Store | Derived reverse index: `{path: {hash, entries}}`; rebuilt from entry frontmatter if missing/corrupt | 🟡  |
+| `.captain/config.json` | Store | Project options, currently `{"embedding": true\|false}`                                            | 🟡  |
+| `.qmd/`                | Store | Generated project-local QMD index (`index.yml`, `index.sqlite`); gitignored                         | 🟡  |
