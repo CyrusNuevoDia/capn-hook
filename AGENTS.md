@@ -16,7 +16,7 @@ Capn Hook is dynamic memory for coding agents: chart discoveries as markdown ent
 | `tests/capn.test.ts` | bun:test suite |
 | `tests/agent-e2e.sh` | Two-phase codex-in-the-loop E2E |
 | `tests/treasure-cove/` | Fixture codebase. Must never mention capn — agents under test learn only from `capn context` output |
-| `GOAL.md` | Cold-audit verifier (v0.4) |
+| `GOAL.md` | Cold-audit verifier (v0.5) |
 | `docs/shaping.md`, `docs/frame.md` | Design history (shaping method) |
 
 ## Conventions
@@ -33,7 +33,7 @@ Capn Hook is dynamic memory for coding agents: chart discoveries as markdown ent
 - capn's index state lives in `.capn/qmd/index.sqlite` — capn must never create a `.qmd/` at a host project's root; that dir belongs to the host's own qmd install (GOAL group X guards this).
 - Bun resolves `@tobilu/qmd` via the symlinked entrypoint's realpath, so the capn repo's node_modules is what loads — keep `bun install` fresh there. Bun silently auto-installs from its global cache if no node_modules is found; don't rely on it.
 - sqlite `-wal`/`-shm` files beside `index.sqlite` are normal; the sqlite is disposable — `capn init` rebuilds it from the markdown.
-- `.capn/journal/` and `.capn/MIND.md` are gitignored per-user memory — tests must not assume they're committed.
+- The whole `.capn/` directory is gitignored local memory (`capn init` manages the line) — tests must not assume any of it is committed.
 - Sandboxed builders usually cannot write `.git` — don't attempt commits from a sandbox; the orchestrating session commits.
 - BM25 (`qmd search`) needs zero models; hybrid (`qmd query`) needs ~2GB of GGUF models, downloaded on first use and cached globally in `~/.cache/qmd/models`.
 
@@ -46,6 +46,17 @@ sh tests/agent-e2e.sh    # agent E2E — spawns codex twice, costs real LLM call
 ```
 
 Run the E2E and any GOAL.md audit from a session that can afford LLM spend; don't wire them into reflexive pre-commit automation.
+
+## Releases
+
+Publishing is owned by GitHub Actions. Pull requests that touch published package inputs need a `.changeset/*.md` file; use an empty changeset for package-adjacent changes that should not bump the version:
+
+```sh
+bun changeset
+bun changeset --empty
+```
+
+When those changes land on `main`, the `release-cli` workflow runs `just check`, applies Changesets, commits any generated version/changelog update back to `main`, publishes `capn-hook` to npm through Trusted Publishing, and tags the published version. Do not publish locally.
 
 
 # Ultracite Code Standards
