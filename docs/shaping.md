@@ -96,12 +96,12 @@ Implementation is verifier-first: [../GOAL.md](../GOAL.md) v0.2 encodes these de
 
 | Affordance             | Kind   | Mechanism                                                                                         | Flag |
 | ---------------------- | ------ | -------------------------------------------------------------------------------------------------- | :--: |
-| `capn add`          | CLI    | Write/replace `.capn/entries/<id>.md`, update `.capn/map.json`, then run `qmd update` (+ embed when enabled) | 🟡  |
+| `capn chart`        | CLI    | Write/replace `.capn/entries/<id>.md`, update `.capn/map.json`, then run `qmd update` (+ embed when enabled) | 🟡  |
 | `capn ask`          | CLI    | Verify hashes first, delete stale entries, then recall with `qmd query` or BM25 `qmd search`       | 🟡  |
 | `capn bust`         | CLI    | Delete every entry referenced by one file path via `.capn/map.json`; exit 0 even on no-op       | 🟡  |
 | `capn prune`        | CLI    | Re-hash all referenced files; delete stale entry files, rebuild map, and run `qmd update` only when needed | 🟡  |
 | `capn list`         | CLI    | Human-readable dump from markdown entry files                                                       |      |
-| `capn delete`       | CLI    | Manual cache-bust by entry id                                                                       |      |
+| `capn unchart`      | CLI    | Manual cache-bust by entry id                                                                       |      |
 | `capn context`      | Hook   | SessionStart: print only the fixed ask-first charting contract to stdout (→ agent context)          | 🟡  |
 | `capn nudge`        | Hook   | Stop: block once per session (marker in tmpdir keyed by session_id; respects stop_hook_active)      |      |
 | `capn init`         | CLI    | Create `.capn/entries/`, `.qmd/`, QMD collection/context registration, hooks, config, optional post-commit prune | 🟡  |
@@ -109,3 +109,17 @@ Implementation is verifier-first: [../GOAL.md](../GOAL.md) v0.2 encodes these de
 | `.capn/map.json`    | Store | Derived reverse index: `{path: {hash, entries}}`; rebuilt from entry frontmatter if missing/corrupt | 🟡  |
 | `.capn/config.json` | Store | Project options, currently `{"embedding": true\|false}`                                            | 🟡  |
 | `.qmd/`                | Store | Generated project-local QMD index (`index.yml`, `index.sqlite`); gitignored                         | 🟡  |
+
+### v0.3 decision (2026-07-03)
+
+v0.3 adds prediction-error-driven user modeling beside the codebase chart. Charts remain episodic code memory; predictions become a journal that teaches only when reality differs enough to reward.
+
+| Part | Decision | Flag |
+| ---- | -------- | :--: |
+| D7 | Rename the entry verbs from `add`/`delete` to `chart`/`unchart`, matching the product language and removing the old spellings | 🟡 |
+| D8 | Add `predict` and `reward`: one markdown file per prediction in `.capn/journal/`, unresolved until a score and observation are written back | 🟡 |
+| D9 | Index the journal as a second QMD collection named `journal`, chosen over unindexed JSONL after empirical research: qmd cannot index JSONL, has no query filters beyond `-c`, and two `.qmd` dirs per root are impossible | 🟡 |
+| D10 | Keep `journal` excluded from default scope so `capn ask` only recalls chart entries; `capn reflect` is the in-session search surface for predictions and rewards | 🟡 |
+| D11 | Add `.capn/MIND.md` as the user's theory of mind, but keep it per-user and never rewrite it in-session | 🟡 |
+| D12 | Run consolidation offline: `capn consolidate` writes a packet tmpfile containing current MIND plus resolved and unresolved journal entries; a scheduled agent rewrites MIND.md and then runs `capn consolidate --clear` | 🟡 |
+| D13 | Gitignore `.capn/journal/` and `.capn/MIND.md`; they are local user memory, not project knowledge to commit | 🟡 |

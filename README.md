@@ -1,6 +1,6 @@
 # Don’t grep the same mystery twice.
 
-Agent-discovered, human-readable Q&A route cache, backed by exact file hashes, add/delete only, auto-invalidated before use, with hooks that nudge the agent to chart only things it actually had to discover.
+Agent-discovered, human-readable Q&A route cache, backed by exact file hashes, chart/unchart only, auto-invalidated before use, with hooks that nudge the agent to chart only things it actually had to discover.
 
 **Code graphs know the code. Capn remembers the path the agent already paid to discover.**
 
@@ -11,10 +11,10 @@ Coding agents re-explore the same codebase every session. The route from "where 
 ## How it works
 
 1. **Chart** — when the agent spends real effort discovering where something lives, it records the route: a question, the answer (with paths), and the files that back it. Each file is content-hashed (sha256) at charting time.
-2. **Ask** — future sessions get a tiny contract at startup, then run `capn ask` before searching. Capn recalls relevant charted answers through QMD: hybrid search when embeddings are on, BM25 when embeddings are off.
-3. **Cache-bust** — if any file backing an entry changes or disappears, the entry is deleted before it can answer. Never updated. The agent re-charts if the question comes up again.
+2. **Ask / reflect** — future sessions get a tiny contract at startup, then run `capn ask` before searching the codebase and `capn reflect` before guessing how the user will react. Capn recalls through QMD: hybrid search when embeddings are on, BM25 when embeddings are off.
+3. **Cache-bust** — if any file backing an entry changes or disappears, the entry is uncharted before it can answer. Never updated. The agent re-charts if the question comes up again.
 
-The chart is add or delete only. Adding is exploration; deleting is cache invalidation. There is no update — an entry is either still true (hashes match) or worthless.
+The chart is chart or unchart only. Charting is exploration; uncharting is cache invalidation. There is no update — an entry is either still true (hashes match) or worthless.
 
 ## Install
 
@@ -39,17 +39,21 @@ Embedding is on by default. `capn init` runs QMD setup and, when embedding is en
 
 ## Commands
 
-| Command                                           | Description                                                                                 |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `capn add "<question>" "<answer>" --files <a,b>`  | Chart a route. Hashes each file; re-adding a question replaces the old entry (delete + add) |
-| `capn ask "<question>"`                           | Recall relevant charted answers after deleting any stale entries first                      |
-| `capn bust <path>`                                | Delete every entry backed by one file                                                       |
-| `capn prune`                                      | Delete every entry whose files changed or vanished                                          |
-| `capn list`                                       | Print charted entries, human-readable                                                       |
-| `capn delete <id>`                                | Manually cache-bust one entry                                                               |
-| `capn context`                                    | Print the ask-first charting contract (used by the SessionStart hook)                       |
-| `capn nudge`                                      | Stop-hook handler; blocks once per session with a reminder to chart                         |
-| `capn init [--git] [--embedding\|--no-embedding]` | Set up `.capn/`, `.qmd/`, QMD registration, and hooks in a project                          |
+| Command                                           | Description                                                                     |
+| ------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `capn ask "<question>"`                           | Recall relevant charted answers after pruning stale entries first               |
+| `capn chart "<question>" "<answer>" --files <a,b>` | Record a route, hashing each backing file                                       |
+| `capn unchart <id>`                               | Manually cache-bust one chart entry                                             |
+| `capn reflect "<question>"`                       | Recall prediction-journal entries and their rewards                             |
+| `capn predict "<prediction>"`                     | Record a prediction about the user's future response                            |
+| `capn reward <id> <0..1> "<observation>"`         | Resolve a prediction with a score and observation                               |
+| `capn consolidate [--clear]`                      | Write a journal consolidation packet path, or clear the journal after handoff    |
+| `capn bust <path>`                                | Delete every chart entry backed by one file                                     |
+| `capn prune`                                      | Delete every chart entry whose files changed or vanished                        |
+| `capn list`                                       | Print charted entries, human-readable                                           |
+| `capn context`                                    | Print the ask-first charting contract (used by the SessionStart hook)           |
+| `capn nudge`                                      | Stop-hook handler; blocks once per session with a reminder to chart             |
+| `capn init [--git] [--embedding\|--no-embedding]` | Set up `.capn/`, `.qmd/`, QMD registration, hooks, and gitignore lines          |
 
 ## The chart
 
@@ -82,13 +86,47 @@ Router in src/api/webhooks.ts; per-event handlers in src/billing/handlers/.
 
 `.capn/config.json` stores project options such as `{"embedding": true}`. `.qmd/` is generated, project-local, and gitignored; QMD stores its `index.yml` and `index.sqlite` there and indexes the `capn` collection from `.capn/entries/`.
 
+## The journal
+
+`.capn/journal/<id>.md` — one markdown file per prediction. The journal is a second QMD collection named `journal`, excluded from default scope so `capn ask` never returns predictions; use `capn reflect` for this surface.
+
+Unresolved:
+
+```md
+---
+capn: 1
+id: a7b9c3d1
+at: 2026-07-03T18:10:00.000Z
+---
+
+# The user will want this split into two commits.
+```
+
+Rewarded:
+
+```md
+---
+capn: 1
+id: a7b9c3d1
+at: 2026-07-03T18:10:00.000Z
+score: 0.8
+rewardedAt: 2026-07-03T18:14:00.000Z
+---
+
+# The user will want this split into two commits.
+
+They asked for logical commits before pushing.
+```
+
+The journal and `.capn/MIND.md` are per-user memory and are gitignored by `capn init`. Charts are episodic memory about the codebase; the journal plus MIND.md are a theory of mind of the user, updated by prediction error — only surprises teach. Consolidation happens offline: a scheduled agent runs `capn consolidate`, reads the packet tmpfile, rewrites `.capn/MIND.md`, then runs `capn consolidate --clear`. MIND.md is never rewritten in-session.
+
 ## Design principles
 
-- **Add or delete, never update.** Staleness is decided by content hashes, not judgment calls.
-- **Answers are never stale.** `capn ask` deletes invalid entries before returning anything.
-- **The chart is disposable.** Any entry can be deleted at any time; the worst case is the agent re-explores, which is exactly the status quo.
+- **Chart or unchart, never update.** Staleness is decided by content hashes, not judgment calls.
+- **Answers are never stale.** `capn ask` removes invalid entries before returning anything.
+- **The chart is disposable.** Any entry can be uncharted at any time; the worst case is the agent re-explores, which is exactly the status quo.
 - **Agent-agnostic core.** The CLI and chart format know nothing about Claude Code; the hooks are a thin adapter. Other agents integrate by calling the same CLI.
-- **Local-first recall.** QMD is project-local. A future latency path could keep `qmd mcp --http --daemon` warm, but the v0.2 contract does not require a daemon.
+- **Local-first recall.** QMD is project-local. A future latency path could keep `qmd mcp --http --daemon` warm, but the v0.3 contract does not require a daemon.
 
 ## Testing
 
@@ -101,4 +139,4 @@ The unit suite drives the CLI strictly as a subprocess in temp dirs. The E2E dro
 
 ## Status
 
-v0.2 implemented and verified: unit suite green, two-phase agent E2E passing. [GOAL.md](GOAL.md) is the standing cold-audit verifier; [docs/shaping.md](docs/shaping.md) has the design history. Agent-facing repo conventions live in [AGENTS.md](AGENTS.md).
+v0.3 is specified by [GOAL.md](GOAL.md), the standing cold-audit verifier. [docs/shaping.md](docs/shaping.md) has the design history. Agent-facing repo conventions live in [AGENTS.md](AGENTS.md).
