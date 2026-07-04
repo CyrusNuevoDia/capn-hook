@@ -12,7 +12,9 @@ Capn Hook is dynamic memory for coding agents: chart discoveries as markdown ent
 
 | Path | What |
 | --- | --- |
-| `src/capn.ts` | The entire CLI. Single executable file, `#!/usr/bin/env bun`, single runtime import: `@tobilu/qmd` (SDK), loaded lazily only by commands that touch the index |
+| `src/capn.ts` | Shebanged CLI entrypoint and command dispatch |
+| `src/commands.ts` | Command handlers and command-local helpers |
+| `src/{project,entries,journal,store,hooks,util}.ts` | Flat storage, project pathing, hook, QMD store, and utility modules |
 | `tests/capn.test.ts` | bun:test suite |
 | `tests/agent-e2e.sh` | Two-phase codex-in-the-loop E2E |
 | `tests/treasure-cove/` | Fixture codebase. Must never mention capn — agents under test learn only from `capn context` output |
@@ -25,7 +27,7 @@ Capn Hook is dynamic memory for coding agents: chart discoveries as markdown ent
 - Tests must pass on a machine with **no GGUF models**: init with `--no-embedding` (BM25). Embedding-path tests must `skipIf` models are absent.
 - Chart entries use `chart`/`unchart` naming; the old `add`/`delete` commands are intentionally gone.
 - Identifier naming: acronyms stay uppercase (`JSON`, `URL`, `DB`); the `Id` suffix stays mixed-case (`entryId`, `sessionId`).
-- Keep `src/capn.ts` lean and single-file; no speculative options.
+- Keep `src/` flat and lean — storage libs plus one `commands.ts`; no speculative options. The shebanged entrypoint stays `src/capn.ts` (GOAL bootstrap, `package.json#bin`, and the symlink recipe point at it). The `@tobilu/qmd` import stays dynamic inside `openStore`.
 
 ## Gotchas (learned the hard way)
 
