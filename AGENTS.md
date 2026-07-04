@@ -36,6 +36,7 @@ Capn Hook is dynamic memory for coding agents: chart discoveries as markdown ent
 - The whole `.capn/` directory is gitignored local memory (`capn init` manages the line) — tests must not assume any of it is committed.
 - Sandboxed builders usually cannot write `.git` — don't attempt commits from a sandbox; the orchestrating session commits.
 - BM25 (`qmd search`) needs zero models; hybrid (`qmd query`) needs ~2GB of GGUF models, downloaded on first use and cached globally in `~/.cache/qmd/models`.
+- qmd's `bin/qmd` launcher re-spawns node (no bun.lock ships in the published package), and node needs `better-sqlite3` native bindings that a clean `bun install` never builds. Tests spawning the host qmd must bypass the launcher and run `node_modules/@tobilu/qmd/dist/cli/qmd.js` under bun, or it exits 1 on fresh checkouts and CI.
 
 ## Commands
 

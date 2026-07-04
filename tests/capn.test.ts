@@ -16,7 +16,10 @@ import { join, resolve } from "node:path";
 import { spawnSync } from "bun";
 
 const capnPath = resolve(import.meta.dir, "../src/capn.ts");
-const qmdPath = resolve(import.meta.dir, "../node_modules/.bin/qmd");
+const qmdPath = resolve(
+  import.meta.dir,
+  "../node_modules/@tobilu/qmd/dist/cli/qmd.js"
+);
 const predictedIdPattern = /^predicted ([0-9a-f]{8})\n$/;
 const isoDatePrefixPattern = /at: \d{4}-\d{2}-\d{2}T/;
 const rewardedAtPrefixPattern = /rewardedAt: \d{4}-\d{2}-\d{2}T/;
@@ -97,8 +100,11 @@ function run(cmd: string[], cwd = workDir, env: Record<string, string> = {}) {
   });
 }
 
+// qmd's bin launcher re-spawns node, whose sqlite bindings (better-sqlite3)
+// a clean `bun install` never builds; run the dist entry under bun so the
+// host qmd stays hermetic (bun:sqlite, no native postinstalls).
 function qmd(args: string[], cwd = workDir) {
-  return run([qmdPath, ...args], cwd);
+  return run([process.execPath, qmdPath, ...args], cwd);
 }
 
 function dotQMDDirs(root: string, current = root): string[] {
@@ -914,12 +920,18 @@ test("capn qmd storage coexists with an existing host qmd project", () => {
     ? readFileSync(hostConfigPath, "utf8")
     : undefined;
 
-  expect(qmd(["init"]).exitCode).toBe(0);
-  expect(
-    qmd(["collection", "add", join(workDir, "docs"), "--name", "hostdocs"])
-      .exitCode
-  ).toBe(0);
-  expect(qmd(["update"]).exitCode).toBe(0);
+  const hostInit = qmd(["init"]);
+  expect(hostInit.exitCode, hostInit.stderr.toString()).toBe(0);
+  const hostAdd = qmd([
+    "collection",
+    "add",
+    join(workDir, "docs"),
+    "--name",
+    "hostdocs",
+  ]);
+  expect(hostAdd.exitCode, hostAdd.stderr.toString()).toBe(0);
+  const hostUpdate = qmd(["update"]);
+  expect(hostUpdate.exitCode, hostUpdate.stderr.toString()).toBe(0);
   const hostIndexPath = join(workDir, ".qmd/index.yml");
   const hostIndex = readFileSync(hostIndexPath);
   expect(dotQMDDirs(workDir)).toEqual([".qmd"]);
