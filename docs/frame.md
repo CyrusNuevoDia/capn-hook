@@ -2,7 +2,7 @@
 shaping: true
 ---
 
-# Captain Hook — Frame
+# Capn Hook — Frame
 
 ## Source
 
@@ -12,7 +12,7 @@ shaping: true
 >
 > It would also probably be useful for it to store the hash of the file so that if the files change you can go and cache bust the memory and then just delete them. It doesn't need to deal with updating; it is either delete or add and deleting is like cache busting and adding is like, "Oh it went down the path." It shouldn't add it because the idea is that if an agent is spending time going to discover different things along the way, it can remember that route and that path and save for itself some hints in a way automatically. It basically builds a map for itself.
 >
-> That's why I call it Captain Hook because it's like a captain going and exploring and charting and making maps, and it uses hooks.
+> That's why I call it Capn Hook because it's like a capn going and exploring and charting and making maps, and it uses hooks.
 
 ## Problem
 

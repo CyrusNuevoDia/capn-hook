@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Captain Hook — Branding Exploration</title>
+<title>Capn Hook — Branding Exploration</title>
 <style>
   :root {
     --ink: #16293b;
@@ -111,15 +111,15 @@
 <main>
 
 <header>
-  <div class="wordmark">Captain <span class="hook">Hook</span></div>
+  <div class="wordmark">Capn <span class="hook">Hook</span></div>
   <div class="rule">⚓</div>
   <p class="tagline">Chart the waters once.</p>
 </header>
 
 <section>
   <h2>The Name</h2>
-  <p class="lede">A captain explores, charts, and never sounds the same shoal twice. The pun does real work: the product is literally built on <em>hooks</em> — SessionStart, Stop, post-commit — and the villain wink keeps it from taking itself too seriously.</p>
-  <p>Vocabulary follows the metaphor and doubles as the API: you <strong>chart</strong> a route (<code>captain add</code>), you <strong>ask the captain</strong> (<code>captain ask</code>), stale entries get <strong>busted</strong> (<code>captain bust</code>), the record is <strong>the chart</strong> (<code>.captain/entries/</code>). Branding and interface are the same surface — an agent that learns the words has learned the tool.</p>
+  <p class="lede">A capn explores, charts, and never sounds the same shoal twice. The pun does real work: the product is literally built on <em>hooks</em> — SessionStart, Stop, post-commit — and the villain wink keeps it from taking itself too seriously.</p>
+  <p>Vocabulary follows the metaphor and doubles as the API: you <strong>chart</strong> a route (<code>capn add</code>), you <strong>ask the capn</strong> (<code>capn ask</code>), stale entries get <strong>busted</strong> (<code>capn bust</code>), the record is <strong>the chart</strong> (<code>.capn/entries/</code>). Branding and interface are the same surface — an agent that learns the words has learned the tool.</p>
 </section>
 
 <section>
@@ -174,9 +174,9 @@
     <div class="label">Display — old-style serif, tracked caps</div>
     <div class="display">CHART · ASK · BUST</div>
     <div class="label">Body — same serif, natural case</div>
-    <p>Entries whose backing files change are deleted automatically, so when the captain answers, the answer is current.</p>
+    <p>Entries whose backing files change are deleted automatically, so when the capn answers, the answer is current.</p>
     <div class="label">Interface — monospace, always for commands</div>
-    <p class="mono">captain add "&lt;question&gt;" "&lt;answer&gt;" --files src/api/webhooks.ts</p>
+    <p class="mono">capn add "&lt;question&gt;" "&lt;answer&gt;" --files src/api/webhooks.ts</p>
   </div>
   <p style="margin-top:18px"><em>Stack: Iowan Old Style → Palatino → Georgia. Ships-log serif on chart paper, instruments in mono. No webfonts — the brand must survive a README.</em></p>
 </section>
@@ -184,12 +184,12 @@
 <section>
   <h2>Voice</h2>
   <p>Confident, brief, lightly nautical — one flourish per message, never a costume. The shipped contract is the reference specimen:</p>
-  <blockquote class="voice">Thinking about finding something? Ask the captain first. A hit hands you the answer and the exact files, skipping the whole search. A miss costs seconds; re-exploring costs minutes.</blockquote>
-  <blockquote class="voice">Captain's log before you go: did this session discover any routes worth charting?</blockquote>
+  <blockquote class="voice">Thinking about finding something? Ask the capn first. A hit hands you the answer and the exact files, skipping the whole search. A miss costs seconds; re-exploring costs minutes.</blockquote>
+  <blockquote class="voice">Capn's log before you go: did this session discover any routes worth charting?</blockquote>
   <h2 style="margin-top:44px">Taglines</h2>
   <ul class="taglines">
     <li class="pick">Chart the waters once. <span class="why">← lead. The whole product in four words.</span></li>
-    <li>Ask the captain first. <span class="why">behavioral — doubles as the hook contract's imperative.</span></li>
+    <li>Ask the capn first. <span class="why">behavioral — doubles as the hook contract's imperative.</span></li>
     <li>Dynamic memory for coding agents. <span class="why">descriptive subtitle for READMEs and directories.</span></li>
     <li>Your agent's been here before. <span class="why">emotional angle; good for a launch post title.</span></li>
   </ul>
@@ -198,13 +198,13 @@
 <section>
   <h2>Terminal Specimen</h2>
   <div class="terminal mono">
-<span class="prompt">$</span> <span class="cmd">captain ask "how do stripe webhooks get processed"</span><br>
+<span class="prompt">$</span> <span class="cmd">capn ask "how do stripe webhooks get processed"</span><br>
 <span class="hit">Where are payment webhooks handled?</span><br>
 Router in src/api/webhooks.ts; per-event handlers in src/billing/handlers/.<br>
 <span class="dim">files: src/api/webhooks.ts</span><br>
 <span class="dim">score: 91%</span><br>
 <br>
-<span class="prompt">$</span> <span class="cmd">captain prune</span><br>
+<span class="prompt">$</span> <span class="cmd">capn prune</span><br>
 <span class="dim">pruned 1 stale entries</span>
   </div>
 </section>

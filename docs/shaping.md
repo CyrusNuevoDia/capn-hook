@@ -2,7 +2,7 @@
 shaping: true
 ---
 
-# Captain Hook — Shaping
+# Capn Hook — Shaping
 
 See [frame.md](frame.md) for problem/outcome.
 
@@ -21,14 +21,14 @@ See [frame.md](frame.md) for problem/outcome.
 
 ## A: CLI + SessionStart injection
 
-The core is a standalone CLI (`captain-hook`); Claude Code integration is a thin hook layer.
+The core is a standalone CLI (`capn-hook`); Claude Code integration is a thin hook layer.
 
 | Part | Mechanism                                                                                                    | Flag |
 | ---- | ------------------------------------------------------------------------------------------------------------ | :--: |
-| A1   | `captain-hook add "<question>" "<answer>" --files a.ts,b.ts` → appends JSONL entry with sha256 per file       |      |
-| A2   | `captain-hook prune` → re-hash referenced files, delete entries where any hash mismatches or file is gone     |      |
+| A1   | `capn-hook add "<question>" "<answer>" --files a.ts,b.ts` → appends JSONL entry with sha256 per file       |      |
+| A2   | `capn-hook prune` → re-hash referenced files, delete entries where any hash mismatches or file is gone     |      |
 | A3   | SessionStart hook: run prune, then print map + one-paragraph "when you discover something, run add" contract  |      |
-| A4   | `captain-hook init` → writes hook config into project `.claude/settings.json`                                 |      |
+| A4   | `capn-hook init` → writes hook config into project `.claude/settings.json`                                 |      |
 
 ## B: A + per-prompt recall (UserPromptSubmit matching)
 
@@ -47,7 +47,7 @@ Same as A, plus the Stop hook blocks completion once per session asking the agen
 | ---- | ------------------------------------------------------------------------------------------ | :--: |
 | C1   | = A1–A4                                                                                     |      |
 | C2   | Stop hook: first stop of a session returns block + "chart any discoveries worth keeping"   |      |
-| C3   | Installable git post-commit hook that runs `captain prune` (opt-in via `captain init --git`) |      |
+| C3   | Installable git post-commit hook that runs `capn prune` (opt-in via `capn init --git`) |      |
 
 ## Fit Check
 
@@ -73,19 +73,19 @@ Same as A, plus the Stop hook blocks completion once per session asking the agen
 
 - Recording reinforcement: Stop-hook nudge, once per session (C2)
 - Runtime: Bun + TypeScript, single-file CLI, zero deps
-- Storage: `.captain/map.jsonl` in the project (JSONL, append-friendly); CLI binary named `captain`
-- Prune triggers: SessionStart (before injection), `captain prune` manually, and opt-in git post-commit hook (C3)
+- Storage: `.capn/map.jsonl` in the project (JSONL, append-friendly); CLI binary named `capn`
+- Prune triggers: SessionStart (before injection), `capn prune` manually, and opt-in git post-commit hook (C3)
 - Recall: prune + full-map dump into context at SessionStart (per-prompt matching deferred; see B)
 
 ### v0.2 decision (2026-07-03)
 
-QMD is selected as the Shape B recall mechanism ahead of schedule, per user direction. The Stop-hook nudge and git-hook pruning stay from Shape C; recall changes from SessionStart map dump to on-demand `captain ask`.
+QMD is selected as the Shape B recall mechanism ahead of schedule, per user direction. The Stop-hook nudge and git-hook pruning stay from Shape C; recall changes from SessionStart map dump to on-demand `capn ask`.
 
 | Part | Decision                                                                                     | Flag |
 | ---- | --------------------------------------------------------------------------------------------- | :--: |
-| D1   | Storage pivots to markdown-per-entry in `.captain/entries/` for human browsability + QMD indexing | 🟡  |
-| D2   | `.captain/map.json` becomes a derived reverse index (`file -> entries`) for O(1) file busting | 🟡  |
-| D3   | `captain ask` recalls via hybrid `qmd query`; `captain init --no-embedding` uses BM25 `qmd search` | 🟡  |
+| D1   | Storage pivots to markdown-per-entry in `.capn/entries/` for human browsability + QMD indexing | 🟡  |
+| D2   | `.capn/map.json` becomes a derived reverse index (`file -> entries`) for O(1) file busting | 🟡  |
+| D3   | `capn ask` recalls via hybrid `qmd query`; `capn init --no-embedding` uses BM25 `qmd search` | 🟡  |
 | D4   | SessionStart prints only the fixed ask-first contract; it does not dump entries or prune      | 🟡  |
 | D5   | New commands: `ask`, `bust`; `init` gains `--embedding` / `--no-embedding`                    | 🟡  |
 | D6   | Runtime adds the `@tobilu/qmd` dependency; JSONL is dropped with no migration path because no users exist yet | 🟡  |
@@ -96,16 +96,16 @@ Implementation is verifier-first: [../GOAL.md](../GOAL.md) v0.2 encodes these de
 
 | Affordance             | Kind   | Mechanism                                                                                         | Flag |
 | ---------------------- | ------ | -------------------------------------------------------------------------------------------------- | :--: |
-| `captain add`          | CLI    | Write/replace `.captain/entries/<id>.md`, update `.captain/map.json`, then run `qmd update` (+ embed when enabled) | 🟡  |
-| `captain ask`          | CLI    | Verify hashes first, delete stale entries, then recall with `qmd query` or BM25 `qmd search`       | 🟡  |
-| `captain bust`         | CLI    | Delete every entry referenced by one file path via `.captain/map.json`; exit 0 even on no-op       | 🟡  |
-| `captain prune`        | CLI    | Re-hash all referenced files; delete stale entry files, rebuild map, and run `qmd update` only when needed | 🟡  |
-| `captain list`         | CLI    | Human-readable dump from markdown entry files                                                       |      |
-| `captain delete`       | CLI    | Manual cache-bust by entry id                                                                       |      |
-| `captain context`      | Hook   | SessionStart: print only the fixed ask-first charting contract to stdout (→ agent context)          | 🟡  |
-| `captain nudge`        | Hook   | Stop: block once per session (marker in tmpdir keyed by session_id; respects stop_hook_active)      |      |
-| `captain init`         | CLI    | Create `.captain/entries/`, `.qmd/`, QMD collection/context registration, hooks, config, optional post-commit prune | 🟡  |
-| `.captain/entries/*.md` | Store | One markdown entry per question: frontmatter `{captain, id, at, files}` plus `# question` and answer body | 🟡  |
-| `.captain/map.json`    | Store | Derived reverse index: `{path: {hash, entries}}`; rebuilt from entry frontmatter if missing/corrupt | 🟡  |
-| `.captain/config.json` | Store | Project options, currently `{"embedding": true\|false}`                                            | 🟡  |
+| `capn add`          | CLI    | Write/replace `.capn/entries/<id>.md`, update `.capn/map.json`, then run `qmd update` (+ embed when enabled) | 🟡  |
+| `capn ask`          | CLI    | Verify hashes first, delete stale entries, then recall with `qmd query` or BM25 `qmd search`       | 🟡  |
+| `capn bust`         | CLI    | Delete every entry referenced by one file path via `.capn/map.json`; exit 0 even on no-op       | 🟡  |
+| `capn prune`        | CLI    | Re-hash all referenced files; delete stale entry files, rebuild map, and run `qmd update` only when needed | 🟡  |
+| `capn list`         | CLI    | Human-readable dump from markdown entry files                                                       |      |
+| `capn delete`       | CLI    | Manual cache-bust by entry id                                                                       |      |
+| `capn context`      | Hook   | SessionStart: print only the fixed ask-first charting contract to stdout (→ agent context)          | 🟡  |
+| `capn nudge`        | Hook   | Stop: block once per session (marker in tmpdir keyed by session_id; respects stop_hook_active)      |      |
+| `capn init`         | CLI    | Create `.capn/entries/`, `.qmd/`, QMD collection/context registration, hooks, config, optional post-commit prune | 🟡  |
+| `.capn/entries/*.md` | Store | One markdown entry per question: frontmatter `{capn, id, at, files}` plus `# question` and answer body | 🟡  |
+| `.capn/map.json`    | Store | Derived reverse index: `{path: {hash, entries}}`; rebuilt from entry frontmatter if missing/corrupt | 🟡  |
+| `.capn/config.json` | Store | Project options, currently `{"embedding": true\|false}`                                            | 🟡  |
 | `.qmd/`                | Store | Generated project-local QMD index (`index.yml`, `index.sqlite`); gitignored                         | 🟡  |

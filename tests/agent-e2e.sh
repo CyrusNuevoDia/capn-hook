@@ -2,7 +2,7 @@
 # Agent-in-the-loop E2E.
 #
 # Two fresh codex agents use the treasure-cove fixture. Everything they know
-# about captain-hook comes from the `captain context` output embedded in their
+# about capn-hook comes from the `capn context` output embedded in their
 # prompts (simulating the SessionStart hook injection) — the prompts themselves
 # must never teach charting or recall. PASS means phase A explored and charted
 # src/harbor/fees.ts, then phase B recalled it without rewriting the chart.
@@ -16,30 +16,30 @@ command -v codex >/dev/null || { echo "FAIL: codex CLI not on PATH"; exit 1; }
 command -v jq >/dev/null || { echo "FAIL: jq not on PATH"; exit 1; }
 command -v rg >/dev/null || { echo "FAIL: rg not on PATH"; exit 1; }
 command -v fd >/dev/null || { echo "FAIL: fd not on PATH"; exit 1; }
-test -x "$REPO/src/captain.ts" || { echo "FAIL: src/captain.ts missing or not executable"; exit 1; }
+test -x "$REPO/src/capn.ts" || { echo "FAIL: src/capn.ts missing or not executable"; exit 1; }
 
 BIN=$(mktemp -d)
-ln -s "$REPO/src/captain.ts" "$BIN/captain"
+ln -s "$REPO/src/capn.ts" "$BIN/capn"
 export PATH="$BIN:$PATH"
 
 WORK=$(mktemp -d)
 cp -R "$REPO/tests/treasure-cove/." "$WORK/"
 cd "$WORK"
 
-if rg -n 'captain|captain-hook' . >/dev/null; then
-  echo "FAIL: fixture mentions captain-hook usage"
-  rg -n 'captain|captain-hook' .
+if rg -n 'capn|capn-hook' . >/dev/null; then
+  echo "FAIL: fixture mentions capn-hook usage"
+  rg -n 'capn|capn-hook' .
   exit 1
 fi
 
 git init -q
-git config user.email e2e@captain-hook.test
-git config user.name "captain-hook e2e"
+git config user.email e2e@capn-hook.test
+git config user.name "capn-hook e2e"
 git add -A && git commit -qm "fixture"
 
-captain init --no-embedding
+capn init --no-embedding
 
-CONTEXT=$(captain context)
+CONTEXT=$(capn context)
 
 TASK_A="Task: figure out where mooring fees are calculated and answer in one sentence. Follow any standing instructions in your session context."
 PROMPT_A="<session-context>
@@ -59,8 +59,8 @@ codex exec --cd "$WORK" --model gpt-5.5 -c model_reasoning_effort=medium \
 
 echo "phase A agent answer: $(cat "$WORK/.agent-answer-a.txt" 2>/dev/null || echo '<none>')"
 
-ENTRIES_DIR="$WORK/.captain/entries"
-test -d "$ENTRIES_DIR" || { echo "FAIL: .captain/entries missing"; exit 1; }
+ENTRIES_DIR="$WORK/.capn/entries"
+test -d "$ENTRIES_DIR" || { echo "FAIL: .capn/entries missing"; exit 1; }
 
 HASH=$(shasum -a 256 src/harbor/fees.ts | cut -d' ' -f1)
 MATCH_ENTRY=
@@ -81,17 +81,17 @@ test -n "$MATCH_ENTRY" || {
 }
 
 ENTRY_ID=$(basename "$MATCH_ENTRY" .md)
-MAP="$WORK/.captain/map.json"
-test -s "$MAP" || { echo "FAIL: .captain/map.json empty or missing"; exit 1; }
+MAP="$WORK/.capn/map.json"
+test -s "$MAP" || { echo "FAIL: .capn/map.json empty or missing"; exit 1; }
 
 jq -e --arg h "$HASH" --arg id "$ENTRY_ID" \
   '."src/harbor/fees.ts".hash == $h and (."src/harbor/fees.ts".entries | index($id))' \
   "$MAP" >/dev/null ||
   { echo "FAIL: map.json does not index src/harbor/fees.ts to $ENTRY_ID with the current hash"; cat "$MAP"; exit 1; }
 
-if rg -n '(/Users/|/home/|/tmp/|/private/)' "$WORK/.captain" >/dev/null; then
-  echo "FAIL: .captain contains absolute paths"
-  rg -n '(/Users/|/home/|/tmp/|/private/)' "$WORK/.captain"
+if rg -n '(/Users/|/home/|/tmp/|/private/)' "$WORK/.capn" >/dev/null; then
+  echo "FAIL: .capn contains absolute paths"
+  rg -n '(/Users/|/home/|/tmp/|/private/)' "$WORK/.capn"
   exit 1
 fi
 

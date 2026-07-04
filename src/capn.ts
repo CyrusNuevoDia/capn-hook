@@ -20,21 +20,21 @@ type Entry = {
   answer: string;
   files: Record<string, string>;
 };
-type CaptainMap = Record<string, { hash: string; entries: string[] }>;
+type CapnMap = Record<string, { hash: string; entries: string[] }>;
 const noChartedAnswer = (question: string) =>
-  `No charted answer. Explore, then chart what you find:\n  captain add "${question}" "<answer with paths>" --files <files>\n`;
+  `No charted answer. Explore, then chart what you find:\n  capn add "${question}" "<answer with paths>" --files <files>\n`;
 const qmdHint = "qmd not found. Install with: bun add @tobilu/qmd, or bun install -g @tobilu/qmd\n";
 function usage() {
   return `Usage:
-  captain add "<question>" "<answer>" --files <a,b>
-  captain ask "<question>"
-  captain bust <path>
-  captain prune
-  captain list
-  captain delete <id>
-  captain context
-  captain nudge
-  captain init [--git] [--embedding|--no-embedding]
+  capn add "<question>" "<answer>" --files <a,b>
+  capn ask "<question>"
+  capn bust <path>
+  capn prune
+  capn list
+  capn delete <id>
+  capn context
+  capn nudge
+  capn init [--git] [--embedding|--no-embedding]
 `;
 }
 function sha256(value: string | Buffer) {
@@ -61,29 +61,29 @@ function findGitRoot(start: string) {
 function findProjectRoot(start: string) {
   let current = resolve(start);
   while (true) {
-    if (existsSync(resolve(current, ".captain"))) return current;
+    if (existsSync(resolve(current, ".capn"))) return current;
     const parent = dirname(current);
     if (parent === current) break;
     current = parent;
   }
   return findGitRoot(start);
 }
-function captainDir(root: string) {
-  return resolve(root, ".captain");
+function capnDir(root: string) {
+  return resolve(root, ".capn");
 }
 function entriesDir(root: string) {
-  return resolve(captainDir(root), "entries");
+  return resolve(capnDir(root), "entries");
 }
 function mapPath(root: string) {
-  return resolve(captainDir(root), "map.json");
+  return resolve(capnDir(root), "map.json");
 }
 function configPath(root: string) {
-  return resolve(captainDir(root), "config.json");
+  return resolve(capnDir(root), "config.json");
 }
 function entryPath(root: string, id: string) {
   return resolve(entriesDir(root), `${id}.md`);
 }
-function ensureCaptain(root: string) {
+function ensureCapn(root: string) {
   mkdirSync(entriesDir(root), { recursive: true });
 }
 function relativeFile(root: string, file: string) {
@@ -127,7 +127,7 @@ function writeEntry(root: string, entry: Entry) {
     .join("\n");
   const answer = entry.answer.endsWith("\n") ? entry.answer : `${entry.answer}\n`;
   const body = `---
-captain: 1
+capn: 1
 id: ${entry.id}
 at: ${entry.at}
 files:
@@ -145,7 +145,7 @@ function parseEntry(path: string): Entry {
   const close = body.indexOf("\n---\n", 4);
   if (close === -1) throw new Error("missing frontmatter close");
   const frontmatter = body.slice(4, close).split("\n");
-  if (frontmatter[0] !== "captain: 1") throw new Error("bad captain version");
+  if (frontmatter[0] !== "capn: 1") throw new Error("bad capn version");
   if (!frontmatter[1]?.startsWith("id: ")) throw new Error("missing id");
   if (!frontmatter[2]?.startsWith("at: ")) throw new Error("missing at");
   if (frontmatter[3] !== "files:") throw new Error("missing files");
@@ -177,8 +177,8 @@ function readEntries(root: string) {
     .sort()
     .map((file) => parseEntry(resolve(entriesDir(root), file)));
 }
-function buildMap(entries: Entry[]): CaptainMap {
-  const map: CaptainMap = {};
+function buildMap(entries: Entry[]): CapnMap {
+  const map: CapnMap = {};
   for (const entry of entries) {
     for (const [path, hash] of Object.entries(entry.files)) {
       map[path] ??= { hash, entries: [] };
@@ -193,10 +193,10 @@ function buildMap(entries: Entry[]): CaptainMap {
   );
 }
 function writeMap(root: string, entries = readEntries(root)) {
-  ensureCaptain(root);
+  ensureCapn(root);
   writeFileSync(mapPath(root), `${JSON.stringify(buildMap(entries), null, 2)}\n`);
 }
-function readMap(root: string): CaptainMap {
+function readMap(root: string): CapnMap {
   try {
     return JSON.parse(readFileSync(mapPath(root), "utf8"));
   } catch {
@@ -246,9 +246,9 @@ function runQMD(root: string, args: string[], qmd = requireQMD()) {
   }
   return result.stdout.toString();
 }
-function hasCaptainCollection(root: string, _qmd: string) {
+function hasCapnCollection(root: string, _qmd: string) {
   const indexPath = resolve(root, ".qmd/index.yml");
-  return existsSync(indexPath) && readFileSync(indexPath, "utf8").includes("  captain:\n");
+  return existsSync(indexPath) && readFileSync(indexPath, "utf8").includes("  capn:\n");
 }
 function config(root: string) {
   try {
@@ -260,12 +260,12 @@ function config(root: string) {
 }
 function updateQMDIfReady(root: string, embed = false, warn = false) {
   if (!existsSync(resolve(root, ".qmd"))) {
-    if (warn) process.stderr.write("captain storage updated; run captain init to enable QMD recall\n");
+    if (warn) process.stderr.write("capn storage updated; run capn init to enable QMD recall\n");
     return;
   }
   const qmd = requireQMD();
-  if (!hasCaptainCollection(root, qmd)) {
-    if (warn) process.stderr.write("captain storage updated; run captain init to enable QMD recall\n");
+  if (!hasCapnCollection(root, qmd)) {
+    if (warn) process.stderr.write("capn storage updated; run capn init to enable QMD recall\n");
     return;
   }
   runQMD(root, ["update"], qmd);
@@ -298,8 +298,8 @@ function prune(root = findProjectRoot(process.cwd()), announce = true) {
 function add(args: string[]) {
   const [question, answer] = args;
   const files = parseFiles(args.slice(2));
-  if (!question || !answer || files.length === 0) fail("captain add requires a question, answer, and --files");
-  if (question.includes("\n")) fail("captain add questions cannot contain newlines");
+  if (!question || !answer || files.length === 0) fail("capn add requires a question, answer, and --files");
+  if (question.includes("\n")) fail("capn add questions cannot contain newlines");
   const root = findProjectRoot(process.cwd());
   const hashedFiles: Record<string, string> = {};
   for (const file of files) {
@@ -311,7 +311,7 @@ function add(args: string[]) {
     }
     hashedFiles[relativePath] = sha256(readFileSync(absolute));
   }
-  ensureCaptain(root);
+  ensureCapn(root);
   const id = sha256(question).slice(0, 8);
   if (existsSync(entryPath(root, id))) rmSync(entryPath(root, id));
   writeEntry(root, {
@@ -330,13 +330,13 @@ function miss(question: string) {
 }
 function ask(args: string[]) {
   const question = args[0];
-  if (!question) fail("captain ask requires a question");
+  if (!question) fail("capn ask requires a question");
   const root = findProjectRoot(process.cwd());
   prune(root, false);
   const qmd = requireQMD();
-  if (!hasCaptainCollection(root, qmd)) fail("captain recall is not initialized. Run captain init.\n");
+  if (!hasCapnCollection(root, qmd)) fail("capn recall is not initialized. Run capn init.\n");
   const command = config(root).embedding ? "query" : "search";
-  const output = runQMD(root, [command, question, "-c", "captain", "-n", "5", "--format", "json"], qmd);
+  const output = runQMD(root, [command, question, "-c", "capn", "-n", "5", "--format", "json"], qmd);
   const jsonStart = output.search(/^\s*[\[{]/m);
   const payload = jsonStart === -1 ? output : output.slice(jsonStart);
   let hits;
@@ -367,7 +367,7 @@ function ask(args: string[]) {
 }
 function bust(args: string[]) {
   const file = args[0];
-  if (!file) fail("captain bust requires a path");
+  if (!file) fail("capn bust requires a path");
   const root = findProjectRoot(process.cwd());
   readMap(root);
   const { relativePath } = relativeFile(root, file);
@@ -377,7 +377,7 @@ function bust(args: string[]) {
   process.stdout.write(`busted ${count} entries\n`);
 }
 function deleteEntry(id: string) {
-  if (!id) fail("captain delete requires an id");
+  if (!id) fail("capn delete requires an id");
   const root = findProjectRoot(process.cwd());
   const path = entryPath(root, id);
   if (!existsSync(path)) fail(`unknown id: ${id}`);
@@ -402,21 +402,21 @@ function listEntries() {
   process.stdout.write(readEntries(root).map(formatEntry).join("\n"));
 }
 function context() {
-  process.stdout.write(`<captain-hook>
+  process.stdout.write(`<capn-hook>
 This project keeps a chart of past discoveries: questions earlier sessions answered, and the files that back each answer.
 
-Thinking about finding something? Ask the captain first:
+Thinking about finding something? Ask the capn first:
 
-    captain ask "where are payment webhooks handled?"
+    capn ask "where are payment webhooks handled?"
 
 A hit hands you the answer and the exact files, skipping the whole search. A miss costs seconds; re-exploring costs minutes.
 
 When you do discover a route the hard way (real exploration, more than a couple of tool calls), chart it for the next session:
 
-    captain add "<question>" "<answer with file paths>" --files <comma-separated files backing it>
+    capn add "<question>" "<answer with file paths>" --files <comma-separated files backing it>
 
-Entries whose backing files change are deleted automatically, so when the captain answers, the answer is current. Re-add a question to replace its entry; never edit entry files by hand.
-</captain-hook>
+Entries whose backing files change are deleted automatically, so when the capn answers, the answer is current. Re-add a question to replace its entry; never edit entry files by hand.
+</capn-hook>
 `);
 }
 function nudge() {
@@ -429,14 +429,14 @@ function nudge() {
   }
   if (payload.stop_hook_active) return;
   const sessionId = payload.session_id || "unknown";
-  const marker = resolve(tmpdir(), `captain-nudge-${sha256(sessionId)}`);
+  const marker = resolve(tmpdir(), `capn-nudge-${sha256(sessionId)}`);
   if (existsSync(marker)) return;
   writeFileSync(marker, new Date().toISOString());
   process.stdout.write(
     JSON.stringify({
       decision: "block",
       reason:
-        'Captain\'s log before you go: did this session discover any routes worth charting - where things live, how something works? Chart each with: captain add "<question>" "<answer with file paths>" --files <files>. If nothing is worth keeping, just stop again.',
+        'Capn\'s log before you go: did this session discover any routes worth charting - where things live, how something works? Chart each with: capn add "<question>" "<answer with file paths>" --files <files>. If nothing is worth keeping, just stop again.',
     }),
   );
 }
@@ -452,7 +452,7 @@ function hookCommands(settings: any, event: string) {
 function addClaudeHook(settings: any, event: string, command: string) {
   settings.hooks ??= {};
   settings.hooks[event] ??= [];
-  if (hookCommands(settings, event).some((existing) => existing.includes("captain "))) return;
+  if (hookCommands(settings, event).some((existing) => existing.includes("capn "))) return;
   settings.hooks[event].push({
     hooks: [{ type: "command", command }],
   });
@@ -463,13 +463,13 @@ function installClaudeHooks(root: string) {
   mkdirSync(claudeDir, { recursive: true });
   let settings: any = {};
   if (existsSync(settingsPath)) settings = JSON.parse(readFileSync(settingsPath, "utf8"));
-  addClaudeHook(settings, "SessionStart", "captain context");
-  addClaudeHook(settings, "Stop", "captain nudge");
+  addClaudeHook(settings, "SessionStart", "capn context");
+  addClaudeHook(settings, "Stop", "capn nudge");
   writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
 }
 function installPostCommit(root: string) {
   const hookPath = resolve(root, ".git/hooks/post-commit");
-  const line = "captain prune";
+  const line = "capn prune";
   let body = "";
   mkdirSync(dirname(hookPath), { recursive: true });
   if (existsSync(hookPath)) body = readFileSync(hookPath, "utf8");
@@ -494,18 +494,18 @@ function writeConfig(root: string, args: string[]) {
 }
 function init(args: string[]) {
   const root = findProjectRoot(process.cwd());
-  ensureCaptain(root);
+  ensureCapn(root);
   const embedding = writeConfig(root, args);
   ensureGitignore(root);
   const qmd = requireQMD();
   if (!existsSync(resolve(root, ".qmd"))) runQMD(root, ["init"], qmd);
   const collectionList = runQMD(root, ["collection", "list"], qmd);
-  if (!collectionList.includes("qmd://captain/") && !hasCaptainCollection(root, qmd)) {
-    runQMD(root, ["collection", "add", entriesDir(root), "--name", "captain"], qmd);
+  if (!collectionList.includes("qmd://capn/") && !hasCapnCollection(root, qmd)) {
+    runQMD(root, ["collection", "add", entriesDir(root), "--name", "capn"], qmd);
   }
   const contextList = runQMD(root, ["context", "list"], qmd);
   if (!contextList.includes("Charted discoveries: questions and where their answers live in this codebase")) {
-    runQMD(root, ["context", "add", "qmd://captain", "Charted discoveries: questions and where their answers live in this codebase"], qmd);
+    runQMD(root, ["context", "add", "qmd://capn", "Charted discoveries: questions and where their answers live in this codebase"], qmd);
   }
   installClaudeHooks(root);
   if (args.includes("--git")) installPostCommit(root);
@@ -514,7 +514,7 @@ function init(args: string[]) {
     runQMD(root, ["embed"], qmd);
   }
   writeMap(root);
-  process.stdout.write(`captain initialized: storage, qmd captain collection, hooks${args.includes("--git") ? ", post-commit" : ""}\n`);
+  process.stdout.write(`capn initialized: storage, qmd capn collection, hooks${args.includes("--git") ? ", post-commit" : ""}\n`);
 }
 function main() {
   const [command, ...args] = Bun.argv.slice(2);

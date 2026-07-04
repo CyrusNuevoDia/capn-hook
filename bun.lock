@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "captain-hook",
+      "name": "capn-hook",
       "dependencies": {
         "@tobilu/qmd": "^2.5.3",
       },
