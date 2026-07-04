@@ -1,6 +1,6 @@
 # Don’t grep the same mystery twice.
 
-Agent-discovered, human-readable Q&A route cache, backed by exact file hashes, chart/unchart only, auto-invalidated before use, with hooks that nudge the agent to chart only things it actually had to discover.
+Agent-discovered, human-readable Q&A route cache, backed by exact file hashes, chart/unchart only, auto-invalidated before use.
 
 **Code graphs know the code. Capn remembers the path the agent already paid to discover.**
 
@@ -39,14 +39,12 @@ capn init            # .capn/, capn's QMD index, Claude Code hooks, and Codex ho
 capn init --git      # also install a post-commit hook that prunes
 ```
 
-`capn init` wires up two hooks for both Claude Code and Codex:
+`capn init` wires SessionStart hooks for both Claude Code and Codex; that injected context contract is the only prompt to chart, and the model decides.
 
-| Agent       | File                          | Hook         | Command        | Effect                                                               |
-| ----------- | ----------------------------- | ------------ | -------------- | -------------------------------------------------------------------- |
-| Claude Code | `.claude/settings.local.json` | SessionStart | `capn context` | Inject the ask-first charting contract                               |
-| Claude Code | `.claude/settings.local.json` | Stop         | `capn nudge`   | Once per session, ask the agent to chart discoveries before stopping |
-| Codex       | `.codex/hooks.json`           | SessionStart | `capn context` | Inject the ask-first charting contract                               |
-| Codex       | `.codex/hooks.json`           | Stop         | `capn nudge`   | Once per session, ask the agent to chart discoveries before stopping |
+| Agent       | File                          | Hook         | Command                                      | Effect                                 |
+| ----------- | ----------------------------- | ------------ | -------------------------------------------- | -------------------------------------- |
+| Claude Code | `.claude/settings.local.json` | SessionStart | `/usr/bin/env` + args `["capn", "context"]` | Inject the ask-first charting contract |
+| Codex       | `.codex/hooks.json`           | SessionStart | `/usr/bin/env` + args `["capn", "context"]` | Inject the ask-first charting contract |
 
 Embedding is on by default. `capn init` prepares capn's own QMD SDK index at `.capn/qmd/index.sqlite`; the first embed model download is about 300MB, and the full hybrid query pipeline may download about 2GB total on first use. A cold `capn ask` with hybrid search can take a few seconds once the models are present. For deterministic or lightweight projects, use `capn init --no-embedding` to use BM25 search only.
 
@@ -67,7 +65,6 @@ Already use qmd yourself? capn's index is its own sqlite under `.capn/` — your
 | `capn prune`                                      | Delete every chart entry whose files changed or vanished                        |
 | `capn list`                                       | Print charted entries, human-readable                                           |
 | `capn context`                                    | Print the ask-first charting contract (used by the SessionStart hook)           |
-| `capn nudge`                                      | Stop-hook handler; blocks once per session with a reminder to chart             |
 | `capn init [--git] [--embedding\|--no-embedding]` | Set up `.capn/`, capn's QMD index, hooks, and gitignore lines                   |
 
 ## The chart

@@ -23,7 +23,6 @@ Capn Hook is dynamic memory for coding agents: chart discoveries as markdown ent
 
 - Tests are **subprocess-only**: spawn the CLI (`Bun.spawnSync`) in mktemp dirs, assert on exit codes/stdout/files. Never import functions from `src/` in tests. Never touch the repo's own `.capn/`, `.claude/`, `.codex/`, or `.capn/qmd/` from tests.
 - Tests must pass on a machine with **no GGUF models**: init with `--no-embedding` (BM25). Embedding-path tests must `skipIf` models are absent.
-- Nudge tests need **fresh random session ids** — nudge markers persist in the OS tmpdir.
 - Chart entries use `chart`/`unchart` naming; the old `add`/`delete` commands are intentionally gone.
 - Identifier naming: acronyms stay uppercase (`JSON`, `URL`, `DB`); the `Id` suffix stays mixed-case (`entryId`, `sessionId`).
 - Keep `src/capn.ts` lean and single-file; no speculative options.

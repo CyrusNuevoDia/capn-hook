@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
@@ -22,6 +22,7 @@ const isoDatePrefixPattern = /at: \d{4}-\d{2}-\d{2}T/;
 const rewardedAtPrefixPattern = /rewardedAt: \d{4}-\d{2}-\d{2}T/;
 const scoreLinePattern = /score: \d+%/;
 const relevanceLinePattern = /relevance: \d+%/;
+const contextHook = { command: "/usr/bin/env", args: ["capn", "context"] };
 
 const contextContract = `<capn-hook>
 This project keeps two memories: a chart of past discoveries (questions earlier sessions answered, and the files backing each answer), and a journal of how your user actually responds.
@@ -156,9 +157,9 @@ test("prints updated usage for help and rejects missing commands", () => {
   capn prune
   capn list
   capn context
-  capn nudge
   capn init [--git] [--embedding|--no-embedding]
 `);
+  expect(help.stdout.toString()).not.toContain("nudge");
 
   const missing = capn();
   expect(missing.exitCode).toBe(1);
@@ -171,6 +172,10 @@ test("prints updated usage for help and rejects missing commands", () => {
   const oldDelete = capn(["delete", "ffffffff"]);
   expect(oldDelete.exitCode).toBe(1);
   expect(oldDelete.stdout.toString()).toContain("Usage:");
+
+  const oldNudge = capn(["nudge"]);
+  expect(oldNudge.exitCode).toBe(1);
+  expect(oldNudge.stdout.toString()).toContain("Usage:");
 });
 
 test("chart writes QMD markdown entry and derived map", () => {
@@ -664,33 +669,6 @@ test("context mentions non-empty MIND without leaking stored content or pruning"
   expect(existsSync(join(workDir, ".capn/entries", `${id}.md`))).toBe(true);
 });
 
-test("nudge blocks once per session unless a stop hook is already active", () => {
-  const sessionId = randomUUID();
-  const input = JSON.stringify({
-    session_id: sessionId,
-    stop_hook_active: false,
-  });
-
-  const first = capn(["nudge"], input);
-  expect(first.exitCode).toBe(0);
-  const firstJSON = JSON.parse(first.stdout.toString());
-  expect(firstJSON.decision).toBe("block");
-  expect(firstJSON.reason).toBe(
-    'Capn\'s log before you go: did this session discover any routes worth charting — where things live, how something works? Chart each with: capn chart "<question>" "<answer with file paths>" --files <files>. Did your user react in a way you did not expect? Log the surprise: capn predict "<what you expected>" then capn reward <id> <0..1> "<what actually happened>". If nothing is worth keeping, just stop again.'
-  );
-
-  const second = capn(["nudge"], input);
-  expect(second.exitCode).toBe(0);
-  expect(second.stdout.toString()).toBe("");
-
-  const active = capn(
-    ["nudge"],
-    JSON.stringify({ session_id: randomUUID(), stop_hook_active: true })
-  );
-  expect(active.exitCode).toBe(0);
-  expect(active.stdout.toString()).toBe("");
-});
-
 test("init is idempotent and installs QMD SDK storage, hooks, gitignore, config, and post-commit pruning", () => {
   expect(run(["git", "init", "-q"]).exitCode).toBe(0);
   expect(run(["git", "config", "user.email", "t@t.co"]).exitCode).toBe(0);
@@ -756,16 +734,24 @@ test("init is idempotent and installs QMD SDK storage, hooks, gitignore, config,
     (group: { hooks: { command: string }[] }) =>
       group.hooks.map((hook) => hook.command)
   );
+  const sessionHooks = settings.hooks.SessionStart.flatMap(
+    (group: { hooks: { args?: string[]; command: string }[] }) => group.hooks
+  );
   const stopCommands = settings.hooks.Stop.flatMap(
     (group: { hooks: { command: string }[] }) =>
       group.hooks.map((hook) => hook.command)
   );
   expect(
-    sessionCommands.filter((command: string) => command === "capn context")
+    sessionHooks.filter(
+      (hook: { args?: string[]; command: string }) =>
+        hook.command === contextHook.command &&
+        JSON.stringify(hook.args) === JSON.stringify(contextHook.args)
+    )
   ).toHaveLength(1);
+  expect(sessionCommands).not.toContain("capn context");
   expect(
-    stopCommands.filter((command: string) => command === "capn nudge")
-  ).toHaveLength(1);
+    stopCommands.filter((command: string) => command.includes("capn "))
+  ).toHaveLength(0);
   expect(stopCommands).toContain("echo old");
   expect(settings.model).toBeUndefined();
   expect(settings.statusLine).toEqual({
@@ -776,16 +762,24 @@ test("init is idempotent and installs QMD SDK storage, hooks, gitignore, config,
     (group: { hooks: { command: string }[] }) =>
       group.hooks.map((hook) => hook.command)
   );
+  const codexSessionHooks = codexHooks.hooks.SessionStart.flatMap(
+    (group: { hooks: { args?: string[]; command: string }[] }) => group.hooks
+  );
   const codexStopCommands = codexHooks.hooks.Stop.flatMap(
     (group: { hooks: { command: string }[] }) =>
       group.hooks.map((hook) => hook.command)
   );
   expect(
-    codexSessionCommands.filter((command: string) => command === "capn context")
+    codexSessionHooks.filter(
+      (hook: { args?: string[]; command: string }) =>
+        hook.command === contextHook.command &&
+        JSON.stringify(hook.args) === JSON.stringify(contextHook.args)
+    )
   ).toHaveLength(1);
+  expect(codexSessionCommands).not.toContain("capn context");
   expect(
-    codexStopCommands.filter((command: string) => command === "capn nudge")
-  ).toHaveLength(1);
+    codexStopCommands.filter((command: string) => command.includes("capn "))
+  ).toHaveLength(0);
   expect(codexStopCommands).toContain("echo codex old");
 
   const postCommit = readFileSync(
@@ -822,6 +816,84 @@ test("init is idempotent and installs QMD SDK storage, hooks, gitignore, config,
   expect(
     existsSync(join(workDir, ".capn/entries", `${entryId("Where is X?")}.md`))
   ).toBe(false);
+});
+
+test("init migrates old Stop nudge hooks without disturbing unrelated Stop hooks", () => {
+  const oldNudgeGroup = {
+    hooks: [{ type: "command", command: "capn nudge" }],
+  };
+  const unrelatedStopGroup = {
+    hooks: [{ type: "command", command: "echo done" }],
+  };
+  const unrelatedStopGroupJSON = JSON.stringify(unrelatedStopGroup);
+
+  mkdirSync(join(workDir, ".claude"), { recursive: true });
+  writeFileSync(
+    join(workDir, ".claude/settings.local.json"),
+    JSON.stringify({
+      hooks: {
+        SessionStart: [
+          { hooks: [{ type: "command", command: "capn context" }] },
+        ],
+        Stop: [oldNudgeGroup, unrelatedStopGroup],
+      },
+    })
+  );
+  mkdirSync(join(workDir, ".codex"), { recursive: true });
+  writeFileSync(
+    join(workDir, ".codex/hooks.json"),
+    JSON.stringify({
+      hooks: {
+        SessionStart: [
+          { hooks: [{ type: "command", command: "capn context" }] },
+        ],
+        Stop: [oldNudgeGroup, unrelatedStopGroup],
+      },
+    })
+  );
+
+  initNoEmbedding();
+  initNoEmbedding();
+
+  const settings = readJSON(join(workDir, ".claude/settings.local.json"));
+  const codexHooks = readJSON(join(workDir, ".codex/hooks.json"));
+  const sessionCommands = settings.hooks.SessionStart.flatMap(
+    (group: { hooks: { command: string }[] }) =>
+      group.hooks.map((hook) => hook.command)
+  );
+  const sessionHooks = settings.hooks.SessionStart.flatMap(
+    (group: { hooks: { args?: string[]; command: string }[] }) => group.hooks
+  );
+  const codexSessionCommands = codexHooks.hooks.SessionStart.flatMap(
+    (group: { hooks: { command: string }[] }) =>
+      group.hooks.map((hook) => hook.command)
+  );
+  const codexSessionHooks = codexHooks.hooks.SessionStart.flatMap(
+    (group: { hooks: { args?: string[]; command: string }[] }) => group.hooks
+  );
+
+  expect(
+    sessionHooks.filter(
+      (hook: { args?: string[]; command: string }) =>
+        hook.command === contextHook.command &&
+        JSON.stringify(hook.args) === JSON.stringify(contextHook.args)
+    )
+  ).toHaveLength(1);
+  expect(sessionCommands).not.toContain("capn context");
+  expect(
+    codexSessionHooks.filter(
+      (hook: { args?: string[]; command: string }) =>
+        hook.command === contextHook.command &&
+        JSON.stringify(hook.args) === JSON.stringify(contextHook.args)
+    )
+  ).toHaveLength(1);
+  expect(codexSessionCommands).not.toContain("capn context");
+  expect(settings.hooks.Stop).toHaveLength(1);
+  expect(codexHooks.hooks.Stop).toHaveLength(1);
+  expect(JSON.stringify(settings.hooks.Stop[0])).toBe(unrelatedStopGroupJSON);
+  expect(JSON.stringify(codexHooks.hooks.Stop[0])).toBe(unrelatedStopGroupJSON);
+  expect(JSON.stringify(settings)).not.toContain("capn nudge");
+  expect(JSON.stringify(codexHooks)).not.toContain("capn nudge");
 });
 
 test("capn qmd storage coexists with an existing host qmd project", () => {

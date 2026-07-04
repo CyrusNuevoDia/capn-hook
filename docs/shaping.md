@@ -135,3 +135,11 @@ v0.4 consumes qmd as an SDK library instead of a spawned CLI. The motivation was
 | D16 | Keep capn invisible to a host project's own qmd install: no root `.qmd/`, no global `~/.config/qmd` writes, no shared collections, and no cross-contaminated search results | 🟡 |
 | D17 | Evidence from the Bun spike: explicit `dbPath`, zero external writes, and clean per-collection scoping; evidence from the symlink probe: Bun resolves the entrypoint realpath to capn's own `node_modules` | 🟡 |
 | D18 | Delete the old subprocess plumbing: PWD pinning, stdout slicing, collection-add idempotence dance, and default-scope exclusion; retire the "never import qmd" rule from AGENTS.md | 🟡 |
+
+### v0.5 decision (2026-07-04)
+
+v0.5 removes the Stop-hook nudge, reversing a v0.1-era affordance. v0.3 established "taught in context, model decides" for predict/reward, and the nudge contradicted that model with a blocking nag plus PATH-fragile hook execution in host sessions.
+
+| Part | Decision | Flag |
+| ---- | -------- | :--: |
+| D19 | Charting is prompted only by the injected SessionStart `capn context` contract; `capn nudge` is removed, and `capn init` migrates old projects by stripping Stop hook groups that run `capn nudge` | 🟡 |

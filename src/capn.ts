@@ -31,9 +31,10 @@ type JournalEntry = {
   observation?: string;
 };
 type CapnMap = Record<string, { hash: string; entries: string[] }>;
-type CommandHook = { command?: string; type?: string };
+type CommandHook = { args?: string[]; command?: string; type?: string };
 type HookGroup = { hooks?: CommandHook[] };
 type HookConfig = { hooks?: Record<string, HookGroup[]> };
+const contextHook = { command: "/usr/bin/env", args: ["capn", "context"] };
 type InitOptions = { embedding?: boolean; git: boolean };
 type SearchHit = { file?: string; filepath?: string; score?: number };
 type CapnStore = {
@@ -75,7 +76,6 @@ function usage() {
   capn prune
   capn list
   capn context
-  capn nudge
   capn init [--git] [--embedding|--no-embedding]
 `;
 }
@@ -834,57 +834,88 @@ Only surprises teach: skip predictions you'd bet on. Wondering how your user has
 ${mindLine}</capn-hook>
 `);
 }
-function nudge() {
-  let payload: { session_id?: string; stop_hook_active?: boolean } = {};
-  try {
-    const input = readFileSync(0, "utf8").trim();
-    if (input) {
-      payload = JSON.parse(input);
-    }
-  } catch {
-    payload = {};
-  }
-  if (payload.stop_hook_active) {
-    return;
-  }
-  const sessionId = payload.session_id || "unknown";
-  const marker = resolve(tmpdir(), `capn-nudge-${sha256(sessionId)}`);
-  if (existsSync(marker)) {
-    return;
-  }
-  writeFileSync(marker, new Date().toISOString());
-  process.stdout.write(
-    JSON.stringify({
-      decision: "block",
-      reason:
-        'Capn\'s log before you go: did this session discover any routes worth charting — where things live, how something works? Chart each with: capn chart "<question>" "<answer with file paths>" --files <files>. Did your user react in a way you did not expect? Log the surprise: capn predict "<what you expected>" then capn reward <id> <0..1> "<what actually happened>". If nothing is worth keeping, just stop again.',
-    })
+function sameArgs(left?: string[], right?: string[]) {
+  const leftArgs = left ?? [];
+  const rightArgs = right ?? [];
+  return (
+    leftArgs.length === rightArgs.length &&
+    leftArgs.every((value, index) => value === rightArgs[index])
   );
 }
-function hookCommands(config: HookConfig, event: string) {
-  const groups = config?.hooks?.[event];
-  if (!Array.isArray(groups)) {
-    return [];
-  }
-  return groups.flatMap((group) =>
-    Array.isArray(group?.hooks)
-      ? group.hooks
-          .map((hook) => hook.command)
-          .filter((command): command is string => typeof command === "string")
-      : []
-  );
-}
-function addCommandHook(config: HookConfig, event: string, command: string) {
+function addCommandHook(
+  config: HookConfig,
+  event: string,
+  { args, command }: { args?: string[]; command: string }
+) {
   config.hooks ??= {};
   config.hooks[event] ??= [];
   if (
-    hookCommands(config, event).some((existing) => existing.includes("capn "))
+    config.hooks[event].some((group) =>
+      group.hooks?.some(
+        (hook) => hook.command === command && sameArgs(hook.args, args)
+      )
+    )
   ) {
     return;
   }
   config.hooks[event].push({
-    hooks: [{ type: "command", command }],
+    hooks: [{ type: "command", command, ...(args ? { args } : {}) }],
   });
+}
+function removeCommandHooks(
+  config: HookConfig,
+  event: string,
+  command: string,
+  args?: string[]
+) {
+  const groups = config.hooks?.[event];
+  if (!Array.isArray(groups)) {
+    return;
+  }
+  const remainingGroups = groups
+    .map((group) => ({
+      ...group,
+      hooks: group.hooks?.filter(
+        (hook) => hook.command !== command || !sameArgs(hook.args, args)
+      ),
+    }))
+    .filter((group) => (group.hooks?.length ?? 0) > 0);
+  if (remainingGroups.length === 0) {
+    delete config.hooks?.[event];
+    return;
+  }
+  if (config.hooks) {
+    config.hooks[event] = remainingGroups;
+  }
+}
+function removeStopNudgeHooks(config: HookConfig) {
+  const hooks = config.hooks;
+  if (!hooks) {
+    return;
+  }
+  const groups = hooks.Stop;
+  if (!Array.isArray(groups)) {
+    return;
+  }
+  const remainingGroups = groups
+    .map((group) => ({
+      ...group,
+      hooks: group.hooks?.filter(
+        (hook) =>
+          !(
+            typeof hook.command === "string" &&
+            hook.command.includes("capn nudge")
+          )
+      ),
+    }))
+    .filter((group) => group.hooks?.length);
+  if (remainingGroups.length === 0) {
+    config.hooks = Object.fromEntries(
+      Object.entries(hooks).filter(([event]) => event !== "Stop")
+    );
+    return;
+  }
+  hooks.Stop = remainingGroups;
 }
 function installClaudeHooks(root: string) {
   const claudeDir = resolve(root, ".claude");
@@ -894,8 +925,9 @@ function installClaudeHooks(root: string) {
   if (existsSync(settingsPath)) {
     settings = JSON.parse(readFileSync(settingsPath, "utf8"));
   }
-  addCommandHook(settings, "SessionStart", "capn context");
-  addCommandHook(settings, "Stop", "capn nudge");
+  removeCommandHooks(settings, "SessionStart", "capn context");
+  addCommandHook(settings, "SessionStart", contextHook);
+  removeStopNudgeHooks(settings);
   writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
 }
 function installCodexHooks(root: string) {
@@ -906,8 +938,9 @@ function installCodexHooks(root: string) {
   if (existsSync(hooksPath)) {
     hooks = JSON.parse(readFileSync(hooksPath, "utf8"));
   }
-  addCommandHook(hooks, "SessionStart", "capn context");
-  addCommandHook(hooks, "Stop", "capn nudge");
+  removeCommandHooks(hooks, "SessionStart", "capn context");
+  addCommandHook(hooks, "SessionStart", contextHook);
+  removeStopNudgeHooks(hooks);
   writeFileSync(hooksPath, `${JSON.stringify(hooks, null, 2)}\n`);
 }
 function installPostCommit(root: string) {
@@ -1055,8 +1088,6 @@ async function main() {
     listEntries();
   } else if (command === "context") {
     context();
-  } else if (command === "nudge") {
-    nudge();
   } else if (command === "init") {
     await init(args);
   } else {
