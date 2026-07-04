@@ -20,13 +20,31 @@
   "type": "module",
   "version": "0.1.0",
   "description": "Dynamic memory for coding agents: chart discoveries as you explore, cache-bust when files change",
+  "license": "MIT",
+  "author": "Cyrus (CyrusNuevoDia)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CyrusNuevoDia/capn-hook.git"
+  },
+  "homepage": "https://github.com/CyrusNuevoDia/capn-hook#readme",
+  "bugs": {
+    "url": "https://github.com/CyrusNuevoDia/capn-hook/issues"
+  },
+  "keywords": [
+    "memory",
+    "coding-agents",
+    "claude-code",
+    "codex",
+    "agent-memory",
+    "cli"
+  ],
   "packageManager": "bun@1.3.14",
   "files": [
     "src/capn.ts",
     "README.md",
     "INSTALL.md",
-    "GOAL.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "LICENSE"
   ],
   "publishConfig": {
     "access": "public"
