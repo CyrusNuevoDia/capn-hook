@@ -1,22 +1,59 @@
 # 🧢🪝 cap'n hook
 
-*Don’t grep the same mystery twice.*
+*Don't grep the same mystery twice.*
 
-Agent-discovered, human-readable Q&A route cache, backed by exact file hashes, chart/unchart only, auto-invalidated before use.
-
-**Code graphs know the code. Capn remembers the path the agent already paid to discover.**
+Persistent memory for coding agents. When your agent spends ten minutes figuring out where something lives in your codebase, capn saves the answer. The next session gets it back in one command instead of re-exploring — and the moment the underlying files change, the saved answer deletes itself.
 
 ## The problem
 
-Coding agents re-explore the same codebase every session. The route from "where are payment webhooks handled?" to "`src/api/webhooks.ts`, handlers in `src/billing/handlers/`" costs real time and tokens — and evaporates when the session ends.
+Coding agents forget everything between sessions. The route from "where are payment webhooks handled?" to "`src/api/webhooks.ts`, handlers in `src/billing/handlers/`" costs real time and tokens — and evaporates when the session ends. Tomorrow's session pays for the same discovery again.
 
 ## How it works
 
-1. **Chart** — when the agent spends real effort discovering where something lives, it records the route: a question, the answer (with paths), and the files that back it. Each file is content-hashed (sha256) at charting time.
-2. **Ask / reflect** — future sessions get a tiny contract at startup, then run `capn ask` before searching the codebase and `capn reflect` before guessing how the user will react. Capn recalls through QMD: hybrid search when embeddings are on, BM25 when embeddings are off.
-3. **Cache-bust** — if any file backing an entry changes or disappears, the entry is uncharted before it can answer. Never updated. The agent re-charts if the question comes up again.
+`capn init` installs a session-start hook for Claude Code and Codex. Every new session, the agent sees one short note: **before searching the codebase, ask capn; after a hard-won discovery, save it.** That note (`capn context`) is the entire integration — no wrapper, no middleware, no forced behavior. The model reads it and decides.
 
-The chart is chart or unchart only. Charting is exploration; uncharting is cache invalidation. There is no update — an entry is either still true (hashes match) or worthless.
+From there the loop is three moves:
+
+**1. Ask before searching.**
+
+```sh
+capn ask "where are payment webhooks handled?"
+```
+
+A hit returns the saved answer and the exact files, skipping the whole search. A miss costs seconds; re-exploring costs minutes.
+
+**2. Save what was expensive to learn.** When the agent works out an answer the hard way, it records the question, the answer, and the files that back it:
+
+```sh
+capn chart "where are payment webhooks handled?" \
+  "Router in src/api/webhooks.ts; handlers in src/billing/handlers/" \
+  --files src/api/webhooks.ts
+```
+
+Each backing file is fingerprinted (sha256) at save time.
+
+**3. Stale answers delete themselves.** If any backing file changes or disappears, the entry is removed before it can ever answer again. Saved answers are never edited — an answer is either still true (its files haven't changed) or it's worthless. That's why the commands are `chart` and `unchart`, not `add` and `update`: capn treats your codebase like a coastline. The agent charts what it has explored; when the coastline shifts, the old chart gets thrown out and the agent re-charts on the next encounter.
+
+Worst case, an entry is deleted and the agent re-explores — which is exactly what it would have done without capn.
+
+## It also learns how you react
+
+Codebase memory is half of it. Your agent also keeps guessing how *you* will respond — will you like this refactor? want it split into two commits? push back on the new dependency? — and forgets every outcome.
+
+capn gives it a second memory for exactly this. When the agent is genuinely unsure how you'll take something, it commits to a prediction, then scores itself once your reaction lands:
+
+```sh
+capn predict "the user will want this split into two commits"
+capn reward a7b9c3d1 0.9 "they asked for logical commits before pushing"
+```
+
+And before a judgment call, it checks how you've reacted to similar things before:
+
+```sh
+capn reflect "how does the user feel about new dependencies?"
+```
+
+Only surprises teach: the session-start note tells the agent to skip predictions it would bet on. Offline, a scheduled agent runs `capn consolidate` to distill the prediction journal into `.capn/MIND.md` — a standing profile of how you work, which future sessions are pointed to before making judgment calls about approach, style, or scope.
 
 ## Install
 
@@ -34,33 +71,31 @@ The published CLI ships as JavaScript and runs under Bun when Bun is available, 
 
 Prefer to delegate? Tell your coding agent to fetch and follow [INSTALL.md](https://github.com/CyrusNuevoDia/capn-hook/blob/main/INSTALL.md) — it's written for the agent to execute, not for you to copy by hand.
 
-`capn init` wires SessionStart hooks for both Claude Code and Codex; that injected context contract is the only prompt to chart, and the model decides.
-
-| Agent       | File                          | Hook         | Command                                      | Effect                                 |
-| ----------- | ----------------------------- | ------------ | -------------------------------------------- | -------------------------------------- |
+| Agent       | File                          | Hook         | Command                                     | Effect                                 |
+| ----------- | ----------------------------- | ------------ | ------------------------------------------- | -------------------------------------- |
 | Claude Code | `.claude/settings.local.json` | SessionStart | `/usr/bin/env` + args `["capn", "context"]` | Inject the ask-first charting contract |
 | Codex       | `.codex/hooks.json`           | SessionStart | `/usr/bin/env` + args `["capn", "context"]` | Inject the ask-first charting contract |
 
-Embedding is on by default. `capn init` prepares capn's own QMD SDK index at `.capn/qmd/index.sqlite`; the first embed model download is about 300MB, and the full hybrid query pipeline may download about 2GB total on first use. A cold `capn ask` with hybrid search can take a few seconds once the models are present. For deterministic or lightweight projects, use `capn init --no-embedding` to use BM25 search only.
+Recall runs on [QMD](https://github.com/tobi/qmd): semantic (hybrid) search by default, plain keyword (BM25) search with `capn init --no-embedding`. The default path downloads embedding models on first use (about 300MB up front, up to ~2GB for the full hybrid pipeline) and a cold `capn ask` can take a few seconds once they're present; the BM25 path downloads nothing and is fully deterministic.
 
 Already use qmd yourself? capn's index is its own sqlite under `.capn/` — your collections never see it, and it never sees yours.
 
 ## Commands
 
-| Command                                           | Description                                                                     |
-| ------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `capn ask "<question>"`                           | Recall relevant charted answers after pruning stale entries first               |
-| `capn chart "<question>" "<answer>" --files <a,b>` | Record a route, hashing each backing file                                       |
-| `capn unchart <id>`                               | Manually cache-bust one chart entry                                             |
-| `capn reflect "<question>"`                       | Recall prediction-journal entries and their rewards                             |
-| `capn predict "<prediction>"`                     | Record a prediction about the user's future response                            |
-| `capn reward <id> <0..1> "<observation>"`         | Resolve a prediction with a score and observation                               |
-| `capn consolidate [--clear]`                      | Write a journal consolidation packet path, or clear the journal after handoff    |
-| `capn bust <path>`                                | Delete every chart entry backed by one file                                     |
-| `capn prune`                                      | Delete every chart entry whose files changed or vanished                        |
-| `capn list`                                       | Print charted entries, human-readable                                           |
-| `capn context`                                    | Print the ask-first charting contract (used by the SessionStart hook)           |
-| `capn init [--git] [--embedding\|--no-embedding]` | Set up `.capn/`, capn's QMD index, hooks, and the `.capn/` gitignore line       |
+| Command                                            | Description                                                                   |
+| -------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `capn ask "<question>"`                            | Recall relevant charted answers after pruning stale entries first             |
+| `capn chart "<question>" "<answer>" --files <a,b>` | Record a discovery, hashing each backing file                                 |
+| `capn unchart <id>`                                | Manually delete one chart entry                                               |
+| `capn reflect "<question>"`                        | Recall prediction-journal entries and their rewards                           |
+| `capn predict "<prediction>"`                      | Record a prediction about the user's future response                          |
+| `capn reward <id> <0..1> "<observation>"`          | Resolve a prediction with a score and observation                             |
+| `capn consolidate [--clear]`                       | Write a journal consolidation packet path, or clear the journal after handoff |
+| `capn bust <path>`                                 | Delete every chart entry backed by one file                                   |
+| `capn prune`                                       | Delete every chart entry whose files changed or vanished                      |
+| `capn list`                                        | Print charted entries, human-readable                                         |
+| `capn context`                                     | Print the ask-first charting contract (used by the SessionStart hook)         |
+| `capn init [--git] [--embedding\|--no-embedding]`  | Set up `.capn/`, capn's QMD index, hooks, and the `.capn/` gitignore line     |
 
 ## The chart
 
@@ -131,7 +166,7 @@ The whole `.capn/` directory is local agent memory and is gitignored by `capn in
 
 - **Chart or unchart, never update.** Staleness is decided by content hashes, not judgment calls.
 - **Answers are never stale.** `capn ask` removes invalid entries before returning anything.
-- **The chart is disposable.** Any entry can be uncharted at any time; the worst case is the agent re-explores, which is exactly the status quo.
+- **The chart is disposable.** Any entry can be deleted at any time; the worst case is the agent re-explores, which is exactly the status quo.
 - **Agent-agnostic core.** The CLI and chart format know nothing about Claude Code; the hooks are a thin adapter. Other agents integrate by calling the same CLI.
 - **Local-first recall.** QMD runs in-process through the SDK against `.capn/qmd/index.sqlite`, isolated from any host qmd install. No daemon, no server — nothing to keep running.
 
