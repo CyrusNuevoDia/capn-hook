@@ -126,6 +126,8 @@ jobs:
       - name: check
         run: just check
       - name: version
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           if ! compgen -G ".changeset/*.md" > /dev/null; then
             echo "No changesets present; package is already versioned."
