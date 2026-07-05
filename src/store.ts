@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { basename } from "node:path";
-import { entriesDir, journalDir, qmdDBPath, qmdDir } from "./project.ts";
+import { entriesDir, qmdDBPath, qmdDir } from "./project.ts";
 import { fail } from "./util.ts";
 
 export type SearchHit = { file?: string; filepath?: string; score?: number };
@@ -51,7 +51,6 @@ export async function openStore(root: string) {
     config: {
       collections: {
         capn: { path: entriesDir(root), pattern: "**/*.md" },
-        journal: { path: journalDir(root), pattern: "**/*.md" },
       },
     },
   });

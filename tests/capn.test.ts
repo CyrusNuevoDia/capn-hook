@@ -20,15 +20,12 @@ const qmdPath = resolve(
   import.meta.dir,
   "../node_modules/@tobilu/qmd/dist/cli/qmd.js"
 );
-const predictedIdPattern = /^predicted ([0-9a-f]{8})\n$/;
 const isoDatePrefixPattern = /at: \d{4}-\d{2}-\d{2}T/;
-const rewardedAtPrefixPattern = /rewardedAt: \d{4}-\d{2}-\d{2}T/;
 const scoreLinePattern = /score: \d+%/;
-const relevanceLinePattern = /relevance: \d+%/;
 const contextHook = { command: "/usr/bin/env", args: ["capn", "context"] };
 
 const contextContract = `<capn-hook>
-This project keeps two memories: a chart of past discoveries (questions earlier sessions answered, and the files backing each answer), and a journal of how your user actually responds.
+This project keeps a chart of past discoveries: questions earlier sessions answered, and the files backing each answer.
 
 Thinking about finding something? Ask the capn first:
 
@@ -41,15 +38,6 @@ When you do discover a route the hard way (real exploration, more than a couple 
     capn chart "<question>" "<answer with file paths>" --files <comma-separated files backing it>
 
 Entries whose backing files change are deleted automatically, so when the capn answers, the answer is current. Re-chart a question to replace its entry; never edit entry files by hand.
-
-Model your user, not just the code. When you're genuinely unsure how they'll take something you shipped or proposed, commit to a prediction — then score it once their response lands:
-
-    capn predict "<compact prediction of how the user will respond>"
-    capn reward <id> <0..1> "<compact observation of how they actually responded>"
-
-Only surprises teach: skip predictions you'd bet on. Wondering how your user has taken something like this before?
-
-    capn reflect "how does the user feel about new dependencies?"
 </capn-hook>
 `;
 
@@ -133,12 +121,6 @@ function entryId(question: string) {
   return sha256(question).slice(0, 8);
 }
 
-function predictionId(stdout: string) {
-  const match = stdout.match(predictedIdPattern);
-  expect(match).not.toBeNull();
-  return match?.[1] ?? "";
-}
-
 function readJSON(path: string) {
   return JSON.parse(readFileSync(path, "utf8"));
 }
@@ -154,36 +136,37 @@ test("prints updated usage for help and rejects missing commands", () => {
   const help = capn(["--help"]);
   expect(help.exitCode).toBe(0);
   expect(help.stdout.toString()).toBe(`Usage:
+  capn init [--git] [--embedding|--no-embedding]
+  capn context
   capn ask "<question>"
   capn chart "<question>" "<answer>" --files <a,b>
   capn unchart <id>
-  capn reflect "<question>"
-  capn predict "<prediction>"
-  capn reward <id> <0..1> "<observation>"
-  capn consolidate [--clear]
   capn bust <path>
   capn prune
   capn list
-  capn context
-  capn init [--git] [--embedding|--no-embedding]
 `);
   expect(help.stdout.toString()).not.toContain("nudge");
+  expect(help.stdout.toString()).not.toContain("reflect");
+  expect(help.stdout.toString()).not.toContain("predict");
+  expect(help.stdout.toString()).not.toContain("reward");
 
   const missing = capn();
   expect(missing.exitCode).toBe(1);
   expect(missing.stdout.toString()).toContain("Usage:");
 
-  const oldAdd = capn(["add", "Q", "A", "--files", "x.ts"]);
-  expect(oldAdd.exitCode).toBe(1);
-  expect(oldAdd.stdout.toString()).toContain("Usage:");
-
-  const oldDelete = capn(["delete", "ffffffff"]);
-  expect(oldDelete.exitCode).toBe(1);
-  expect(oldDelete.stdout.toString()).toContain("Usage:");
-
-  const oldNudge = capn(["nudge"]);
-  expect(oldNudge.exitCode).toBe(1);
-  expect(oldNudge.stdout.toString()).toContain("Usage:");
+  for (const args of [
+    ["add", "Q", "A", "--files", "x.ts"],
+    ["delete", "ffffffff"],
+    ["nudge"],
+    ["reflect", "how does the user feel about new dependencies?"],
+    ["predict", "user will want two commits"],
+    ["reward", "ffffffff", "0.5", "maybe"],
+    ["consolidate"],
+  ]) {
+    const unsupported = capn(args);
+    expect(unsupported.exitCode).toBe(1);
+    expect(unsupported.stdout.toString()).toContain("Usage:");
+  }
 });
 
 test("chart writes QMD markdown entry and derived map", () => {
@@ -357,186 +340,6 @@ test("ask with no hits prints the no-charted-answer contract", () => {
   );
 });
 
-test("predict writes an unresolved journal entry", () => {
-  const predicted = capn([
-    "predict",
-    "user will accept the QMD dependency without pushback",
-  ]);
-  const id = predictionId(predicted.stdout.toString());
-
-  expect(predicted.exitCode, predicted.stderr.toString()).toBe(0);
-  const journal = readFileSync(
-    join(workDir, ".capn/journal", `${id}.md`),
-    "utf8"
-  );
-  expect(journal).toContain("---\ncapn: 1\n");
-  expect(journal).toContain(`id: ${id}\n`);
-  expect(journal).toMatch(isoDatePrefixPattern);
-  expect(journal).not.toContain("score:");
-  expect(journal).toEndWith(
-    "# user will accept the QMD dependency without pushback\n"
-  );
-  expect(journal).not.toContain(workDir);
-});
-
-test("reward rewrites the same journal entry and rejects invalid rewards without changes", () => {
-  const prediction = "user will accept the QMD dependency without pushback";
-  const predicted = capn(["predict", prediction]);
-  const id = predictionId(predicted.stdout.toString());
-  const path = join(workDir, ".capn/journal", `${id}.md`);
-  const unresolved = readFileSync(path, "utf8");
-
-  for (const args of [
-    ["reward", "ffffffff", "0.2", "asked to vendor it instead"],
-    ["reward", id, "1.5", "asked to vendor it instead"],
-    ["reward", id, "-0.1", "asked to vendor it instead"],
-    ["reward", id, "abc", "asked to vendor it instead"],
-    ["reward", id, "0.2", ""],
-  ]) {
-    const rejected = capn(args);
-    expect(rejected.exitCode).toBe(1);
-    expect(readFileSync(path, "utf8")).toBe(unresolved);
-  }
-
-  const rewarded = capn(["reward", id, "0.2", "asked to vendor it instead"]);
-  expect(rewarded.exitCode, rewarded.stderr.toString()).toBe(0);
-  expect(rewarded.stdout.toString()).toBe(`rewarded ${id} (0.2)\n`);
-  const resolved = readFileSync(path, "utf8");
-  expect(resolved).toContain(`id: ${id}\n`);
-  expect(resolved).toContain("score: 0.2\n");
-  expect(resolved).toMatch(rewardedAtPrefixPattern);
-  expect(resolved).toContain(
-    `---\n\n# ${prediction}\n\nasked to vendor it instead\n`
-  );
-
-  const secondReward = capn(["reward", id, "1", "later confirmed"]);
-  expect(secondReward.exitCode).toBe(1);
-  expect(readFileSync(path, "utf8")).toBe(resolved);
-});
-
-test("reflect searches only the prediction journal and formats resolved and unresolved hits", () => {
-  mkdirSync(join(workDir, "src"), { recursive: true });
-  writeFileSync(join(workDir, "src/deps.ts"), "export const deps = true\n");
-  initNoEmbedding();
-  expect(
-    capn([
-      "chart",
-      "Where is dependency policy recorded?",
-      "dependency-sentinel chart answer in src/deps.ts",
-      "--files",
-      "src/deps.ts",
-    ]).exitCode
-  ).toBe(0);
-  const resolvedId = predictionId(
-    capn([
-      "predict",
-      "dependency-sentinel user will reject vendoring qmd",
-    ]).stdout.toString()
-  );
-  expect(
-    capn(["reward", resolvedId, "0.2", "asked to vendor it instead"]).exitCode
-  ).toBe(0);
-  expect(
-    capn(["predict", "dependency-sentinel user may accept remote models"])
-      .exitCode
-  ).toBe(0);
-
-  const reflected = capn(["reflect", "dependency-sentinel"]);
-  expect(reflected.exitCode, reflected.stderr.toString()).toBe(0);
-  expect(reflected.stdout.toString()).toContain(
-    "dependency-sentinel user will reject vendoring qmd"
-  );
-  expect(reflected.stdout.toString()).toContain(
-    "score: 0.2 — asked to vendor it instead"
-  );
-  expect(reflected.stdout.toString()).toContain(
-    "dependency-sentinel user may accept remote models"
-  );
-  expect(reflected.stdout.toString()).toContain("(unresolved)");
-  expect(reflected.stdout.toString()).toMatch(relevanceLinePattern);
-  expect(reflected.stdout.toString()).not.toContain("chart answer");
-
-  const asked = capn(["ask", "dependency-sentinel"]);
-  expect(asked.exitCode, asked.stderr.toString()).toBe(0);
-  expect(asked.stdout.toString()).toContain("dependency-sentinel chart answer");
-  expect(asked.stdout.toString()).not.toContain(
-    "user will reject vendoring qmd"
-  );
-});
-
-test("reflect with no journal hits prints the prediction miss contract", () => {
-  initNoEmbedding();
-
-  const reflected = capn([
-    "reflect",
-    "how does the user feel about new dependencies?",
-  ]);
-
-  expect(reflected.exitCode, reflected.stderr.toString()).toBe(0);
-  expect(reflected.stdout.toString()).toBe(
-    'No reflections on that yet. When unsure how your user will respond, chart a prediction:\n  capn predict "<compact prediction>"\n'
-  );
-});
-
-test("consolidate writes a packet with current mind and journal entries, then clears them", () => {
-  initNoEmbedding();
-  mkdirSync(join(workDir, ".capn"), { recursive: true });
-  writeFileSync(
-    join(workDir, ".capn/MIND.md"),
-    "User prefers narrow patches over broad rewrites.\n"
-  );
-  const resolvedId = predictionId(
-    capn(["predict", "user will accept qmd dependency"]).stdout.toString()
-  );
-  expect(
-    capn(["reward", resolvedId, "0.2", "asked to vendor it instead"]).exitCode
-  ).toBe(0);
-  expect(capn(["predict", "user may want broader release docs"]).exitCode).toBe(
-    0
-  );
-
-  const consolidated = capn(["consolidate"]);
-  expect(consolidated.exitCode, consolidated.stderr.toString()).toBe(0);
-  expect(consolidated.stderr.toString()).toBe("");
-  const packetPath = consolidated.stdout.toString().trim();
-  expect(consolidated.stdout.toString()).toBe(`${packetPath}\n`);
-  expect(packetPath.startsWith(tmpdir())).toBe(true);
-  expect(existsSync(packetPath)).toBe(true);
-  const packet = readFileSync(packetPath, "utf8");
-  expect(packet).toContain("# Capn consolidation\n");
-  expect(packet).toContain("Rewrite .capn/MIND.md as one coherent document");
-  expect(packet).toContain(
-    "When MIND.md is written, run: capn consolidate --clear"
-  );
-  expect(packet).toContain(
-    "## Current MIND.md\n\nUser prefers narrow patches over broad rewrites.\n"
-  );
-  expect(packet).toContain(
-    'predicted: "user will accept qmd dependency" → scored 0.2'
-  );
-  expect(packet).toContain("asked to vendor it instead");
-  expect(packet).toContain('predicted: "user may want broader release docs"');
-
-  const cleared = capn(["consolidate", "--clear"]);
-  expect(cleared.exitCode, cleared.stderr.toString()).toBe(0);
-  expect(cleared.stdout.toString()).toBe("cleared 2 journal entries\n");
-  expect(
-    readdirSync(join(workDir, ".capn/journal")).filter((file) =>
-      file.endsWith(".md")
-    )
-  ).toEqual([]);
-});
-
-test("consolidate with an empty journal reports nothing to consolidate", () => {
-  initNoEmbedding();
-
-  const consolidated = capn(["consolidate"]);
-
-  expect(consolidated.exitCode).toBe(0);
-  expect(consolidated.stdout.toString()).toBe("");
-  expect(consolidated.stderr.toString()).toContain("nothing to consolidate");
-});
-
 test("bust removes entries that cite a file", () => {
   mkdirSync(join(workDir, "src"), { recursive: true });
   writeFileSync(join(workDir, "src/a.ts"), "a\n");
@@ -640,7 +443,7 @@ test("context prints the exact static contract", () => {
   expect(result.stdout.toString()).toBe(contextContract);
 });
 
-test("context mentions non-empty MIND without leaking stored content or pruning", () => {
+test("context does not leak stored content or prune", () => {
   mkdirSync(join(workDir, "src"), { recursive: true });
   writeFileSync(
     join(workDir, "src/context.ts"),
@@ -656,10 +459,10 @@ test("context mentions non-empty MIND without leaking stored content or pruning"
     ]).exitCode
   ).toBe(0);
   const id = entryId("Where is context sentinel?");
-  expect(
-    capn(["predict", "journal-context-sentinel user will like it"]).exitCode
-  ).toBe(0);
-  writeFileSync(join(workDir, ".capn/MIND.md"), "mind-context-sentinel\n");
+  writeFileSync(
+    join(workDir, ".capn/private.md"),
+    "private-context-sentinel\n"
+  );
   writeFileSync(
     join(workDir, "src/context.ts"),
     "export const contextSentinel = 2\n"
@@ -668,12 +471,8 @@ test("context mentions non-empty MIND without leaking stored content or pruning"
   const result = capn(["context"]);
 
   expect(result.exitCode).toBe(0);
-  expect(result.stdout.toString()).toContain(
-    "Your user's charted theory of mind is at .capn/MIND.md — read it before judgment calls about approach, style, or scope."
-  );
   expect(result.stdout.toString()).not.toContain("chart-context-sentinel");
-  expect(result.stdout.toString()).not.toContain("journal-context-sentinel");
-  expect(result.stdout.toString()).not.toContain("mind-context-sentinel");
+  expect(result.stdout.toString()).not.toContain("private-context-sentinel");
   expect(existsSync(join(workDir, ".capn/entries", `${id}.md`))).toBe(true);
 });
 
@@ -714,12 +513,12 @@ test("init is idempotent and installs QMD SDK storage, hooks, gitignore, config,
   expect(first.exitCode, first.stderr.toString()).toBe(0);
   const second = capn(["init", "--git", "--no-embedding"]);
   expect(second.exitCode, second.stderr.toString()).toBe(0);
-  expect(first.stdout.toString()).toContain("qmd capn and journal collections");
+  expect(first.stdout.toString()).toContain("qmd capn collection");
 
   expect(readJSON(join(workDir, ".capn/config.json"))).toEqual({
     embedding: false,
   });
-  expect(existsSync(join(workDir, ".capn/journal"))).toBe(true);
+  expect(existsSync(join(workDir, ".capn/journal"))).toBe(false);
   expect(existsSync(join(workDir, ".capn/qmd/index.sqlite"))).toBe(true);
   expect(existsSync(join(workDir, ".qmd"))).toBe(false);
   const gitignoreLines = readFileSync(
