@@ -1,5 +1,17 @@
 {
   "enabledPlugins": {
     "plugin-dev@claude-plugins-official": true
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/env capn context"
+          }
+        ]
+      }
+    ]
   }
 }

@@ -52,10 +52,10 @@ The published CLI ships as JavaScript and runs under Bun when Bun is available, 
 
 Prefer to delegate? Tell your coding agent to fetch and follow [INSTALL.md](https://github.com/CyrusNuevoDia/capn-hook/blob/main/INSTALL.md) — it's written for the agent to execute, not for you to copy by hand.
 
-| Agent       | File                          | Hook         | Command                                     | Effect                                 |
-| ----------- | ----------------------------- | ------------ | ------------------------------------------- | -------------------------------------- |
-| Claude Code | `.claude/settings.local.json` | SessionStart | `/usr/bin/env` + args `["capn", "context"]` | Inject the ask-first charting contract |
-| Codex       | `.codex/hooks.json`           | SessionStart | `/usr/bin/env` + args `["capn", "context"]` | Inject the ask-first charting contract |
+| Agent       | File                    | Hook         | Command                     | Effect                                 |
+| ----------- | ----------------------- | ------------ | --------------------------- | -------------------------------------- |
+| Claude Code | `.claude/settings.json` | SessionStart | `/usr/bin/env capn context` | Inject the ask-first charting contract |
+| Codex       | `.codex/hooks.json`     | SessionStart | `/usr/bin/env capn context` | Inject the ask-first charting contract |
 
 Recall runs on [QMD](https://github.com/tobi/qmd): semantic (hybrid) search by default, plain keyword (BM25) search with `capn init --no-embedding`. The default path downloads embedding models on first use (about 300MB up front, up to ~2GB for the full hybrid pipeline) and a cold `capn ask` can take a few seconds once they're present; the BM25 path downloads nothing and is fully deterministic.
 

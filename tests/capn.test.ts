@@ -22,7 +22,8 @@ const qmdPath = resolve(
 );
 const isoDatePrefixPattern = /at: \d{4}-\d{2}-\d{2}T/;
 const scoreLinePattern = /score: \d+%/;
-const contextHook = { command: "/usr/bin/env", args: ["capn", "context"] };
+const contextHook = { command: "/usr/bin/env capn context" };
+const splitContextHook = { command: "/usr/bin/env", args: ["capn", "context"] };
 
 const contextContract = `<capn-hook>
 This project keeps a chart of past discoveries: questions earlier sessions answered, and the files backing each answer.
@@ -538,16 +539,14 @@ test("init is idempotent and installs QMD SDK storage, hooks, gitignore, config,
     gitignoreLines.filter((line) => line === ".capn/MIND.md")
   ).toHaveLength(0);
 
-  expect(readJSON(join(workDir, ".claude/settings.json"))).toEqual({
-    model: "sonnet",
-  });
+  const claudeSettings = readJSON(join(workDir, ".claude/settings.json"));
   const settings = readJSON(join(workDir, ".claude/settings.local.json"));
   const codexHooks = readJSON(join(workDir, ".codex/hooks.json"));
-  const sessionCommands = settings.hooks.SessionStart.flatMap(
+  const sessionCommands = claudeSettings.hooks.SessionStart.flatMap(
     (group: { hooks: { command: string }[] }) =>
       group.hooks.map((hook) => hook.command)
   );
-  const sessionHooks = settings.hooks.SessionStart.flatMap(
+  const sessionHooks = claudeSettings.hooks.SessionStart.flatMap(
     (group: { hooks: { args?: string[]; command: string }[] }) => group.hooks
   );
   const stopCommands = settings.hooks.Stop.flatMap(
@@ -557,8 +556,7 @@ test("init is idempotent and installs QMD SDK storage, hooks, gitignore, config,
   expect(
     sessionHooks.filter(
       (hook: { args?: string[]; command: string }) =>
-        hook.command === contextHook.command &&
-        JSON.stringify(hook.args) === JSON.stringify(contextHook.args)
+        hook.command === contextHook.command && hook.args === undefined
     )
   ).toHaveLength(1);
   expect(sessionCommands).not.toContain("capn context");
@@ -566,7 +564,9 @@ test("init is idempotent and installs QMD SDK storage, hooks, gitignore, config,
     stopCommands.filter((command: string) => command.includes("capn "))
   ).toHaveLength(0);
   expect(stopCommands).toContain("echo old");
+  expect(claudeSettings.model).toBe("sonnet");
   expect(settings.model).toBeUndefined();
+  expect(settings.hooks.SessionStart).toBeUndefined();
   expect(settings.statusLine).toEqual({
     type: "command",
     command: "echo status",
@@ -585,8 +585,7 @@ test("init is idempotent and installs QMD SDK storage, hooks, gitignore, config,
   expect(
     codexSessionHooks.filter(
       (hook: { args?: string[]; command: string }) =>
-        hook.command === contextHook.command &&
-        JSON.stringify(hook.args) === JSON.stringify(contextHook.args)
+        hook.command === contextHook.command && hook.args === undefined
     )
   ).toHaveLength(1);
   expect(codexSessionCommands).not.toContain("capn context");
@@ -642,12 +641,21 @@ test("init migrates old Stop nudge hooks without disturbing unrelated Stop hooks
 
   mkdirSync(join(workDir, ".claude"), { recursive: true });
   writeFileSync(
-    join(workDir, ".claude/settings.local.json"),
+    join(workDir, ".claude/settings.json"),
     JSON.stringify({
       hooks: {
         SessionStart: [
           { hooks: [{ type: "command", command: "capn context" }] },
         ],
+        Stop: [oldNudgeGroup, unrelatedStopGroup],
+      },
+    })
+  );
+  writeFileSync(
+    join(workDir, ".claude/settings.local.json"),
+    JSON.stringify({
+      hooks: {
+        SessionStart: [{ hooks: [{ type: "command", ...splitContextHook }] }],
         Stop: [oldNudgeGroup, unrelatedStopGroup],
       },
     })
@@ -659,6 +667,7 @@ test("init migrates old Stop nudge hooks without disturbing unrelated Stop hooks
       hooks: {
         SessionStart: [
           { hooks: [{ type: "command", command: "capn context" }] },
+          { hooks: [{ type: "command", ...splitContextHook }] },
         ],
         Stop: [oldNudgeGroup, unrelatedStopGroup],
       },
@@ -668,13 +677,14 @@ test("init migrates old Stop nudge hooks without disturbing unrelated Stop hooks
   initNoEmbedding();
   initNoEmbedding();
 
+  const claudeSettings = readJSON(join(workDir, ".claude/settings.json"));
   const settings = readJSON(join(workDir, ".claude/settings.local.json"));
   const codexHooks = readJSON(join(workDir, ".codex/hooks.json"));
-  const sessionCommands = settings.hooks.SessionStart.flatMap(
+  const sessionCommands = claudeSettings.hooks.SessionStart.flatMap(
     (group: { hooks: { command: string }[] }) =>
       group.hooks.map((hook) => hook.command)
   );
-  const sessionHooks = settings.hooks.SessionStart.flatMap(
+  const sessionHooks = claudeSettings.hooks.SessionStart.flatMap(
     (group: { hooks: { args?: string[]; command: string }[] }) => group.hooks
   );
   const codexSessionCommands = codexHooks.hooks.SessionStart.flatMap(
@@ -688,23 +698,29 @@ test("init migrates old Stop nudge hooks without disturbing unrelated Stop hooks
   expect(
     sessionHooks.filter(
       (hook: { args?: string[]; command: string }) =>
-        hook.command === contextHook.command &&
-        JSON.stringify(hook.args) === JSON.stringify(contextHook.args)
+        hook.command === contextHook.command && hook.args === undefined
     )
   ).toHaveLength(1);
   expect(sessionCommands).not.toContain("capn context");
+  expect(sessionCommands).not.toContain(splitContextHook.command);
   expect(
     codexSessionHooks.filter(
       (hook: { args?: string[]; command: string }) =>
-        hook.command === contextHook.command &&
-        JSON.stringify(hook.args) === JSON.stringify(contextHook.args)
+        hook.command === contextHook.command && hook.args === undefined
     )
   ).toHaveLength(1);
   expect(codexSessionCommands).not.toContain("capn context");
+  expect(codexSessionCommands).not.toContain(splitContextHook.command);
+  expect(settings.hooks.SessionStart).toBeUndefined();
+  expect(claudeSettings.hooks.Stop).toHaveLength(1);
   expect(settings.hooks.Stop).toHaveLength(1);
   expect(codexHooks.hooks.Stop).toHaveLength(1);
+  expect(JSON.stringify(claudeSettings.hooks.Stop[0])).toBe(
+    unrelatedStopGroupJSON
+  );
   expect(JSON.stringify(settings.hooks.Stop[0])).toBe(unrelatedStopGroupJSON);
   expect(JSON.stringify(codexHooks.hooks.Stop[0])).toBe(unrelatedStopGroupJSON);
+  expect(JSON.stringify(claudeSettings)).not.toContain("capn nudge");
   expect(JSON.stringify(settings)).not.toContain("capn nudge");
   expect(JSON.stringify(codexHooks)).not.toContain("capn nudge");
 });

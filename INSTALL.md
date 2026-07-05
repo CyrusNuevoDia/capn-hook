@@ -70,8 +70,8 @@ capn context
 
 should print the ask-first charting contract. Also check that:
 
-- `.claude/settings.local.json` in the target project now has `SessionStart → /usr/bin/env` with args `["capn","context"]`
-- `.codex/hooks.json` in the target project now has `SessionStart → /usr/bin/env` with args `["capn","context"]`
+- `.claude/settings.json` in the target project now has `SessionStart → /usr/bin/env capn context`
+- `.codex/hooks.json` in the target project now has `SessionStart → /usr/bin/env capn context`
 - `.capn/` exists in the target project and `.capn/` is gitignored
 
 capn-hook is now live in this project. See [README.md](README.md) for the full command reference (`capn init`, `capn context`, `capn ask`, `capn chart`, `capn unchart`, `capn bust`, `capn prune`, `capn list`).

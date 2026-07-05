@@ -10,7 +10,8 @@ import { dirname, resolve } from "node:path";
 type CommandHook = { args?: string[]; command?: string; type?: string };
 type HookGroup = { hooks?: CommandHook[] };
 type HookConfig = { hooks?: Record<string, HookGroup[]> };
-const contextHook = { command: "/usr/bin/env", args: ["capn", "context"] };
+const contextHook = { command: "/usr/bin/env capn context" };
+const splitContextHook = { command: "/usr/bin/env", args: ["capn", "context"] };
 const trailingNewlinePattern = /\n$/;
 
 function sameArgs(left?: string[], right?: string[]) {
@@ -102,16 +103,42 @@ function removeStopNudgeHooks(config: HookConfig) {
 
 export function installClaudeHooks(root: string) {
   const claudeDir = resolve(root, ".claude");
-  const settingsPath = resolve(claudeDir, "settings.local.json");
+  const settingsPath = resolve(claudeDir, "settings.json");
+  const localSettingsPath = resolve(claudeDir, "settings.local.json");
   mkdirSync(claudeDir, { recursive: true });
   let settings: HookConfig = {};
   if (existsSync(settingsPath)) {
     settings = JSON.parse(readFileSync(settingsPath, "utf8"));
   }
   removeCommandHooks(settings, "SessionStart", "capn context");
+  removeCommandHooks(
+    settings,
+    "SessionStart",
+    splitContextHook.command,
+    splitContextHook.args
+  );
   addCommandHook(settings, "SessionStart", contextHook);
   removeStopNudgeHooks(settings);
   writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
+
+  if (existsSync(localSettingsPath)) {
+    const localSettings = JSON.parse(
+      readFileSync(localSettingsPath, "utf8")
+    ) as HookConfig;
+    removeCommandHooks(localSettings, "SessionStart", "capn context");
+    removeCommandHooks(
+      localSettings,
+      "SessionStart",
+      splitContextHook.command,
+      splitContextHook.args
+    );
+    removeCommandHooks(localSettings, "SessionStart", contextHook.command);
+    removeStopNudgeHooks(localSettings);
+    writeFileSync(
+      localSettingsPath,
+      `${JSON.stringify(localSettings, null, 2)}\n`
+    );
+  }
 }
 
 export function installCodexHooks(root: string) {
@@ -123,6 +150,12 @@ export function installCodexHooks(root: string) {
     hooks = JSON.parse(readFileSync(hooksPath, "utf8"));
   }
   removeCommandHooks(hooks, "SessionStart", "capn context");
+  removeCommandHooks(
+    hooks,
+    "SessionStart",
+    splitContextHook.command,
+    splitContextHook.args
+  );
   addCommandHook(hooks, "SessionStart", contextHook);
   removeStopNudgeHooks(hooks);
   writeFileSync(hooksPath, `${JSON.stringify(hooks, null, 2)}\n`);
