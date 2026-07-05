@@ -253,11 +253,11 @@ Thinking about finding something? Ask the capn first:
 
 A hit hands you the files that answer it, skipping the whole search. A miss costs seconds; re-exploring costs minutes.
 
-When you do discover a route the hard way (real exploration, more than a couple of tool calls), chart it for the next session:
+When you do discover a route the hard way (real exploration, more than a couple of tool calls), chart it for the next session as a small, answerable question:
 
     capn chart "<question>" --files <comma-separated files backing it> [--details "<line numbers or gotchas>"]
 
-The files ARE the answer; --details is only for extras like line numbers or gotchas. Entries whose backing files change are deleted automatically, so when the capn answers, the answer is current. Re-chart a question to replace its entry; never edit entry files by hand.
+The files ARE the answer; --details is only for extras like line numbers or gotchas. Prefer several atomic charts over one big "context" chart when a discovery contains separable facts, but include multiple files when they jointly answer one focused question. Entries whose backing files change are deleted automatically, so when the capn answers, the answer is current. Re-chart a question to replace its entry; never edit entry files by hand.
 </capn-hook>
 `);
 }

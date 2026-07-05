@@ -22,7 +22,7 @@ capn ask "where are payment webhooks handled?"
 
 A hit returns JSONL with the exact files that answer the question, skipping the whole search. A miss costs seconds; re-exploring costs minutes.
 
-**2. Save what was expensive to learn.** When the agent works out an answer the hard way, it records the question and the files that answer it, with optional details for extras like line numbers or gotchas:
+**2. Save what was expensive to learn.** When the agent works out an answer the hard way, it records a small, answerable question and the files that answer it, with optional details for extras like line numbers or gotchas:
 
 ```sh
 capn chart "where are payment webhooks handled?" \
@@ -31,6 +31,8 @@ capn chart "where are payment webhooks handled?" \
 ```
 
 Each backing file is fingerprinted (sha256) at save time.
+
+Good charts are atomic, not giant context dumps. Split separable facts into separate charts, but include multiple files when they jointly answer one focused question.
 
 **3. Stale answers delete themselves.** If any backing file changes or disappears, the entry is removed before it can ever answer again. Saved answers are never edited — an answer is either still true (its files haven't changed) or it's worthless. That's why the commands are `chart` and `unchart`, not `add` and `update`: capn treats your codebase like a coastline. The agent charts what it has explored; when the coastline shifts, the old chart gets thrown out and the agent re-charts on the next encounter.
 
