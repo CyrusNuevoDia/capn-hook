@@ -21,7 +21,7 @@
     "test": "bun test"
   },
   "type": "module",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Dynamic memory for coding agents: chart discoveries as you explore, cache-bust when files change",
   "license": "MIT",
   "author": "Cyrus (CyrusNuevoDia)",
