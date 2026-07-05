@@ -55,7 +55,7 @@
     "access": "public"
   },
   "bin": {
-    "capn": "./bin/capn"
+    "capn": "bin/capn"
   },
   "trustedDependencies": [
     "node-llama-cpp",
