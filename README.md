@@ -2,7 +2,7 @@
 
 *Don't grep the same mystery twice.*
 
-Persistent memory for coding agents. When your agent spends ten minutes figuring out where something lives in your codebase, capn saves the answer. The next session gets it back in one command instead of re-exploring — and the moment the underlying files change, the saved answer deletes itself.
+Persistent memory for coding agents. When your agent spends ten minutes figuring out where something lives in your codebase, capn saves the files that answer the question. The next session gets them back in one command instead of re-exploring — and the moment the underlying files change, the saved answer deletes itself.
 
 ## The problem
 
@@ -20,14 +20,14 @@ From there the loop is three moves:
 capn ask "where are payment webhooks handled?"
 ```
 
-A hit returns the saved answer and the exact files, skipping the whole search. A miss costs seconds; re-exploring costs minutes.
+A hit returns JSONL with the exact files that answer the question, skipping the whole search. A miss costs seconds; re-exploring costs minutes.
 
-**2. Save what was expensive to learn.** When the agent works out an answer the hard way, it records the question, the answer, and the files that back it:
+**2. Save what was expensive to learn.** When the agent works out an answer the hard way, it records the question and the files that answer it, with optional details for extras like line numbers or gotchas:
 
 ```sh
 capn chart "where are payment webhooks handled?" \
-  "Router in src/api/webhooks.ts; handlers in src/billing/handlers/" \
-  --files src/api/webhooks.ts
+  --files src/api/webhooks.ts,src/billing/handlers/stripe.ts \
+  --details "Router starts near line 40; Stripe handler owns signature checks."
 ```
 
 Each backing file is fingerprinted (sha256) at save time.
@@ -67,8 +67,8 @@ Already use qmd yourself? capn's index is its own sqlite under `.capn/` — your
 | -------------------------------------------------- | ----------------------------------------------------------------------------- |
 | `capn init [--git] [--embedding\|--no-embedding]`  | Set up `.capn/`, capn's QMD index, hooks, and the `.capn/` gitignore line     |
 | `capn context`                                     | Print the ask-first charting contract (used by the SessionStart hook)         |
-| `capn ask "<question>"`                            | Recall relevant charted answers after pruning stale entries first             |
-| `capn chart "<question>" "<answer>" --files <a,b>` | Record a discovery, hashing each backing file                                 |
+| `capn ask "<question>"`                            | Print JSONL hits for relevant charted answers after pruning stale entries first |
+| `capn chart "<question>" --files <a,b> [--details "<extra context>"]` | Record a discovery, hashing each backing file                     |
 | `capn unchart <id>`                                | Manually delete one chart entry                                               |
 | `capn bust <path>`                                 | Delete every chart entry backed by one file                                   |
 | `capn prune`                                       | Delete every chart entry whose files changed or vanished                      |
@@ -89,7 +89,7 @@ files:
 
 # Where are payment webhooks handled?
 
-Router in src/api/webhooks.ts; per-event handlers in src/billing/handlers/.
+Router starts near line 40; Stripe handler owns signature checks.
 ```
 
 `.capn/map.json` — a derived reverse index from file path to current hash and entry ids. If it is missing or corrupt, capn rebuilds it from entry frontmatter.

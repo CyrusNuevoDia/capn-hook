@@ -14,7 +14,7 @@ export type Entry = {
   id: string;
   at: string;
   question: string;
-  answer: string;
+  details: string;
   files: Record<string, string>;
 };
 export type CapnMap = Record<string, { hash: string; entries: string[] }>;
@@ -52,9 +52,10 @@ export function writeEntry(root: string, entry: Entry) {
     .sort()
     .map((path) => `  ${mapKey(path)}: ${entry.files[path]}`)
     .join("\n");
-  const answer = entry.answer.endsWith("\n")
-    ? entry.answer
-    : `${entry.answer}\n`;
+  const details =
+    entry.details === ""
+      ? ""
+      : `\n${entry.details.endsWith("\n") ? entry.details : `${entry.details}\n`}`;
   const body = `---
 capn: 1
 id: ${entry.id}
@@ -64,8 +65,7 @@ ${files}
 ---
 
 # ${entry.question}
-
-${answer}`;
+${details}`;
   writeFileSync(entryPath(root, entry.id), body);
 }
 
@@ -108,18 +108,24 @@ export function parseEntry(path: string): Entry {
   }
   const headingEnd = markdown.indexOf("\n", 1);
   if (headingEnd === -1) {
-    throw new Error("missing body");
+    return {
+      id: frontmatter[1].slice(4),
+      at: frontmatter[2].slice(4),
+      files,
+      question: markdown.slice(3),
+      details: "",
+    };
   }
-  let answer = markdown.slice(headingEnd + 1);
-  if (answer.startsWith("\n")) {
-    answer = answer.slice(1);
+  let details = markdown.slice(headingEnd + 1);
+  if (details.startsWith("\n")) {
+    details = details.slice(1);
   }
   return {
     id: frontmatter[1].slice(4),
     at: frontmatter[2].slice(4),
     files,
     question: markdown.slice(3, headingEnd),
-    answer,
+    details,
   };
 }
 

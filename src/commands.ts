@@ -35,8 +35,11 @@ import { fail, sha256 } from "./util.ts";
 
 type InitOptions = { embedding?: boolean; git: boolean };
 
+const chartSyntax =
+  'capn chart "<question>" --files <files> [--details "<extra context>"]';
+
 const noChartedAnswer = (question: string) =>
-  `No charted answer. Explore, then chart what you find:\n  capn chart "${question}" "<answer with paths>" --files <files>\n`;
+  `No charted answer. Explore, then chart what you find:\n  capn chart "${question}" --files <files> [--details "<extra context>"]\n`;
 
 function splitFiles(value: string) {
   return value
@@ -45,20 +48,26 @@ function splitFiles(value: string) {
     .filter(Boolean);
 }
 
-function parseFiles(args: string[]) {
-  const { tokens } = parseArgs({
+function parseChartArgs(args: string[]) {
+  const { positionals, values } = parseArgs({
     args,
-    options: { files: { type: "string", multiple: true } },
-    strict: false,
-    tokens: true,
+    allowPositionals: true,
+    options: {
+      details: { type: "string" },
+      files: { type: "string", multiple: true },
+    },
   });
-  return tokens.flatMap((token) =>
-    token.kind === "option" &&
-    token.name === "files" &&
-    typeof token.value === "string"
-      ? splitFiles(token.value)
-      : []
-  );
+  const [question, extra] = positionals;
+  if (extra !== undefined) {
+    fail(
+      `capn chart no longer accepts a positional answer. Use:\n  ${chartSyntax}`
+    );
+  }
+  return {
+    details: values.details ?? "",
+    files: Array.isArray(values.files) ? values.files.flatMap(splitFiles) : [],
+    question,
+  };
 }
 
 export async function prune(
@@ -85,10 +94,9 @@ export async function prune(
 }
 
 export async function chart(args: string[]) {
-  const [question, answer] = args;
-  const files = parseFiles(args.slice(2));
-  if (!(question && answer) || files.length === 0) {
-    fail("capn chart requires a question, answer, and --files");
+  const { details, files, question } = parseChartArgs(args);
+  if (!question || files.length === 0) {
+    fail(`capn chart requires a question and --files. Use:\n  ${chartSyntax}`);
   }
   if (question.includes("\n")) {
     fail("capn chart questions cannot contain newlines");
@@ -114,7 +122,7 @@ export async function chart(args: string[]) {
   writeEntry(root, {
     id,
     question,
-    answer,
+    details,
     files: hashedFiles,
     at: new Date().toISOString(),
   });
@@ -124,7 +132,8 @@ export async function chart(args: string[]) {
 }
 
 function miss(question: string) {
-  process.stdout.write(noChartedAnswer(question));
+  process.stderr.write(noChartedAnswer(question));
+  process.exitCode = 1;
 }
 
 export async function ask(args: string[]) {
@@ -158,9 +167,23 @@ export async function ask(args: string[]) {
     for (const hit of found) {
       const score =
         hit.score <= 1 ? Math.round(hit.score * 100) : Math.round(hit.score);
-      process.stdout.write(
-        `${hit.entry.question}\n${hit.entry.answer.trimEnd()}\nfiles: ${Object.keys(hit.entry.files).join(", ")}\nscore: ${score}%\n\n`
-      );
+      const details = hit.entry.details.trimEnd();
+      const row: {
+        id: string;
+        question: string;
+        files: string[];
+        details?: string;
+        score: number;
+      } = {
+        id: hit.entry.id,
+        question: hit.entry.question,
+        files: Object.keys(hit.entry.files).sort(),
+        score,
+      };
+      if (details) {
+        row.details = details;
+      }
+      process.stdout.write(`${JSON.stringify(row)}\n`);
     }
   } finally {
     await store.close();
@@ -206,11 +229,12 @@ function formatEntry(entry: Entry) {
     .sort()
     .map((path) => `  - ${path}`)
     .join("\n");
+  const details = entry.details.trimEnd();
   return `${entry.id}
 Q: ${entry.question}
-A: ${entry.answer.trimEnd()}
 Files:
 ${files}
+${details ? `Details:\n${details}\n` : ""}
 `;
 }
 
@@ -227,13 +251,13 @@ Thinking about finding something? Ask the capn first:
 
     capn ask "where are payment webhooks handled?"
 
-A hit hands you the answer and the exact files, skipping the whole search. A miss costs seconds; re-exploring costs minutes.
+A hit hands you the files that answer it, skipping the whole search. A miss costs seconds; re-exploring costs minutes.
 
 When you do discover a route the hard way (real exploration, more than a couple of tool calls), chart it for the next session:
 
-    capn chart "<question>" "<answer with file paths>" --files <comma-separated files backing it>
+    capn chart "<question>" --files <comma-separated files backing it> [--details "<line numbers or gotchas>"]
 
-Entries whose backing files change are deleted automatically, so when the capn answers, the answer is current. Re-chart a question to replace its entry; never edit entry files by hand.
+The files ARE the answer; --details is only for extras like line numbers or gotchas. Entries whose backing files change are deleted automatically, so when the capn answers, the answer is current. Re-chart a question to replace its entry; never edit entry files by hand.
 </capn-hook>
 `);
 }

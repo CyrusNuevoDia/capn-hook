@@ -14,7 +14,7 @@ export function usage() {
   capn init [--git] [--embedding|--no-embedding]
   capn context
   capn ask "<question>"
-  capn chart "<question>" "<answer>" --files <a,b>
+  capn chart "<question>" --files <a,b> [--details "<extra context>"]
   capn unchart <id>
   capn bust <path>
   capn prune
