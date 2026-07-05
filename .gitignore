@@ -3,3 +3,5 @@ dist/
 .qmd/
 .codex/
 .capn/
+eval/repos/
+eval/runs/

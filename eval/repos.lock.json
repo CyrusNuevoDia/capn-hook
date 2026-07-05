@@ -1,0 +1,44 @@
+{
+  "repos": [
+    {
+      "slug": "polar",
+      "repo": "polarsource/polar",
+      "cloneURL": "git@github.com:polarsource/polar.git",
+      "defaultBranch": "main",
+      "commit": "97e9430901a4197876318672cdd4fae99fc49a2b",
+      "sourceURL": "https://github.com/polarsource/polar"
+    },
+    {
+      "slug": "posthog",
+      "repo": "PostHog/posthog",
+      "cloneURL": "git@github.com:PostHog/posthog.git",
+      "defaultBranch": "master",
+      "commit": "6577fc44f726da86da4288e5a8ef011571a80c47",
+      "sourceURL": "https://github.com/PostHog/posthog"
+    },
+    {
+      "slug": "twenty",
+      "repo": "twentyhq/twenty",
+      "cloneURL": "git@github.com:twentyhq/twenty.git",
+      "defaultBranch": "main",
+      "commit": "fe8ec0463abd626c017bd4bd1cd0de21c68cf2ab",
+      "sourceURL": "https://github.com/twentyhq/twenty"
+    },
+    {
+      "slug": "dub",
+      "repo": "dubinc/dub",
+      "cloneURL": "git@github.com:dubinc/dub.git",
+      "defaultBranch": "main",
+      "commit": "51e5a8fd38923d8ae83c215a9e82b8994a81d4c7",
+      "sourceURL": "https://github.com/dubinc/dub"
+    },
+    {
+      "slug": "documenso",
+      "repo": "documenso/documenso",
+      "cloneURL": "git@github.com:documenso/documenso.git",
+      "defaultBranch": "main",
+      "commit": "50f272be876f14a2e22518552f5030c3117c3391",
+      "sourceURL": "https://github.com/documenso/documenso"
+    }
+  ]
+}
