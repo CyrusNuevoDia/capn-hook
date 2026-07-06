@@ -4,6 +4,12 @@
 
 Persistent memory for coding agents. When your agent spends ten minutes figuring out where something lives in your codebase, capn saves the files that answer the question. The next session gets them back in one command instead of re-exploring — and the moment the underlying files change, the saved answer deletes itself.
 
+## 77% fewer tokens on repeat questions
+
+Across 60 real developer questions on 5 production codebases (Dub, Polar, PostHog, Twenty, Documenso), an agent recalling from capn used **77% fewer tokens** than an agent exploring cold — every answer correct in both arms, the right chart recalled on all 60 questions, and a charting session paying for itself in ~1.6 recalls.
+
+[How the eval was run, full numbers, and raw evidence →](eval/RESULTS.md)
+
 ## The problem
 
 Coding agents forget everything between sessions. The route from "where are payment webhooks handled?" to "`src/api/webhooks.ts`, handlers in `src/billing/handlers/`" costs real time and tokens — and evaporates when the session ends. Tomorrow's session pays for the same discovery again.

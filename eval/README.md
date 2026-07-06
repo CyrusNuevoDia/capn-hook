@@ -1,7 +1,8 @@
 # capn-hook eval corpus
 
 This directory is for repeatable capn-hook evaluation work against real open
-source applications.
+source applications. This file documents the harness internals; for the
+public-facing methodology and results, see [RESULTS.md](RESULTS.md).
 
 ## Layout
 
