@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterAll, test as bunTest, expect } from "bun:test";
 import { createHash } from "node:crypto";
 import {
   chmodSync,
@@ -13,7 +13,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { execaSync } from "execa";
+import { execa } from "execa";
 
 const capnPath = resolve(import.meta.dir, "../src/run.ts");
 const qmdPath = resolve(
@@ -41,60 +41,73 @@ The files ARE the answer; --details is only for extras like line numbers or gotc
 </capn-hook>
 `;
 
-let workDir = "";
+// Every test owns its temp workspace, so they are safe to run concurrently.
+const test = bunTest.concurrent;
 
-beforeEach(() => {
-  workDir = mkdtempSync(join(tmpdir(), "capn-test-"));
-});
+const workDirs: string[] = [];
 
-afterEach(() => {
-  if (workDir) {
-    rmSync(workDir, { recursive: true, force: true });
+afterAll(() => {
+  for (const dir of workDirs) {
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 
-function capn(args: string[] = [], input = "", cwd = workDir) {
-  return execaSync(process.execPath, [capnPath, ...args], {
-    cwd,
-    env: qmdEnv(cwd),
-    input: input || undefined,
-    reject: false,
-    stripFinalNewline: false,
-  });
-}
+// Every test gets its own workspace so tests can run concurrently: no shared
+// mutable state, and every subprocess is scoped to the test's own temp dir.
+function workspace() {
+  const workDir = mkdtempSync(join(tmpdir(), "capn-test-"));
+  workDirs.push(workDir);
 
-function qmdEnv(cwd = workDir, env: Record<string, string> = {}) {
-  const {
-    XDG_CACHE_HOME: _cache,
-    XDG_CONFIG_HOME: _config,
-    ...base
-  } = process.env;
-  return {
-    ...base,
-    HOME: join(workDir, ".home"),
-    PWD: cwd,
-    ...env,
-  };
-}
-
-function run(cmd: string[], cwd = workDir, env: Record<string, string> = {}) {
-  const [file, ...args] = cmd;
-  if (file === undefined) {
-    throw new Error("run requires a command");
+  function qmdEnv(cwd = workDir, env: Record<string, string> = {}) {
+    const {
+      XDG_CACHE_HOME: _cache,
+      XDG_CONFIG_HOME: _config,
+      ...base
+    } = process.env;
+    return {
+      ...base,
+      HOME: join(workDir, ".home"),
+      PWD: cwd,
+      ...env,
+    };
   }
-  return execaSync(file, args, {
-    cwd,
-    env: qmdEnv(cwd, env),
-    reject: false,
-    stripFinalNewline: false,
-  });
-}
 
-// qmd's bin launcher re-spawns node, whose sqlite bindings (better-sqlite3)
-// a clean `bun install` never builds; run the dist entry under bun so the
-// host qmd stays hermetic (bun:sqlite, no native postinstalls).
-function qmd(args: string[], cwd = workDir) {
-  return run([process.execPath, qmdPath, ...args], cwd);
+  function capn(args: string[] = [], input = "", cwd = workDir) {
+    return execa(process.execPath, [capnPath, ...args], {
+      cwd,
+      env: qmdEnv(cwd),
+      input: input || undefined,
+      reject: false,
+      stripFinalNewline: false,
+    });
+  }
+
+  function run(cmd: string[], cwd = workDir, env: Record<string, string> = {}) {
+    const [file, ...args] = cmd;
+    if (file === undefined) {
+      throw new Error("run requires a command");
+    }
+    return execa(file, args, {
+      cwd,
+      env: qmdEnv(cwd, env),
+      reject: false,
+      stripFinalNewline: false,
+    });
+  }
+
+  // qmd's bin launcher re-spawns node, whose sqlite bindings (better-sqlite3)
+  // a clean `bun install` never builds; run the dist entry under bun so the
+  // host qmd stays hermetic (bun:sqlite, no native postinstalls).
+  function qmd(args: string[], cwd = workDir) {
+    return run([process.execPath, qmdPath, ...args], cwd);
+  }
+
+  async function initNoEmbedding() {
+    const result = await capn(["init", "--no-embedding"]);
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+  }
+
+  return { workDir, capn, run, qmd, initNoEmbedding };
 }
 
 function dotQMDDirs(root: string, current = root): string[] {
@@ -133,15 +146,11 @@ function parseJSONLines(output: string) {
     .map((line) => JSON.parse(line));
 }
 
-function initNoEmbedding() {
-  const result = capn(["init", "--no-embedding"]);
-  expect(result.exitCode, result.stderr.toString()).toBe(0);
-}
-
-test("prints updated usage for help and rejects missing commands", () => {
+test("prints updated usage for help and rejects missing commands", async () => {
+  const { workDir, capn } = workspace();
   mkdirSync(join(workDir, ".capn"));
 
-  const help = capn(["--help"]);
+  const help = await capn(["--help"]);
   expect(help.exitCode).toBe(0);
   expect(help.stdout.toString()).toBe(`Usage:
   capn init [--git] [--embedding|--no-embedding]
@@ -158,7 +167,7 @@ test("prints updated usage for help and rejects missing commands", () => {
   expect(help.stdout.toString()).not.toContain("predict");
   expect(help.stdout.toString()).not.toContain("reward");
 
-  const missing = capn();
+  const missing = await capn();
   expect(missing.exitCode).toBe(1);
   expect(missing.stdout.toString()).toContain("Usage:");
 
@@ -171,18 +180,19 @@ test("prints updated usage for help and rejects missing commands", () => {
     ["reward", "ffffffff", "0.5", "maybe"],
     ["consolidate"],
   ]) {
-    const unsupported = capn(args);
+    const unsupported = await capn(args);
     expect(unsupported.exitCode).toBe(1);
     expect(unsupported.stdout.toString()).toContain("Usage:");
   }
 });
 
-test("chart writes QMD markdown entry and derived map", () => {
+test("chart writes QMD markdown entry and derived map", async () => {
+  const { workDir, capn } = workspace();
   mkdirSync(join(workDir, "src/harbor"), { recursive: true });
   const source = "export function mooringFee() { return 1 }\n";
   writeFileSync(join(workDir, "src/harbor/fees.ts"), source);
 
-  const added = capn([
+  const added = await capn([
     "chart",
     "Where are mooring fees calculated?",
     "--files",
@@ -219,8 +229,9 @@ test("chart writes QMD markdown entry and derived map", () => {
   });
 });
 
-test("chart refuses missing files without writing storage", () => {
-  const added = capn([
+test("chart refuses missing files without writing storage", async () => {
+  const { workDir, capn } = workspace();
+  const added = await capn([
     "chart",
     "Where is the anchor?",
     "--files",
@@ -234,11 +245,12 @@ test("chart refuses missing files without writing storage", () => {
   expect(existsSync(join(workDir, ".capn"))).toBe(false);
 });
 
-test("chart rejects legacy positional answer syntax", () => {
+test("chart rejects legacy positional answer syntax", async () => {
+  const { workDir, capn } = workspace();
   mkdirSync(join(workDir, "src"), { recursive: true });
   writeFileSync(join(workDir, "src/a.ts"), "a\n");
 
-  const added = capn([
+  const added = await capn([
     "chart",
     "Where is A?",
     "Old positional answer",
@@ -253,30 +265,35 @@ test("chart rejects legacy positional answer syntax", () => {
   expect(existsSync(join(workDir, ".capn"))).toBe(false);
 });
 
-test("re-charting the same question replaces the entry and map rows", () => {
+test("re-charting the same question replaces the entry and map rows", async () => {
+  const { workDir, capn } = workspace();
   mkdirSync(join(workDir, "src"), { recursive: true });
   writeFileSync(join(workDir, "src/a.ts"), "export const a = 1\n");
   writeFileSync(join(workDir, "src/b.ts"), "export const b = 2\n");
 
   expect(
-    capn([
-      "chart",
-      "Where is X?",
-      "--files",
-      "src/a.ts",
-      "--details",
-      "First details",
-    ]).exitCode
+    (
+      await capn([
+        "chart",
+        "Where is X?",
+        "--files",
+        "src/a.ts",
+        "--details",
+        "First details",
+      ])
+    ).exitCode
   ).toBe(0);
   expect(
-    capn([
-      "chart",
-      "Where is X?",
-      "--files",
-      "src/b.ts",
-      "--details",
-      "Second details",
-    ]).exitCode
+    (
+      await capn([
+        "chart",
+        "Where is X?",
+        "--files",
+        "src/b.ts",
+        "--details",
+        "Second details",
+      ])
+    ).exitCode
   ).toBe(0);
 
   const entries = readdirSync(join(workDir, ".capn/entries"));
@@ -293,12 +310,13 @@ test("re-charting the same question replaces the entry and map rows", () => {
   });
 });
 
-test("chart from a subdirectory stores root-relative POSIX file paths", () => {
-  expect(run(["git", "init", "-q"]).exitCode).toBe(0);
+test("chart from a subdirectory stores root-relative POSIX file paths", async () => {
+  const { workDir, capn, run } = workspace();
+  expect((await run(["git", "init", "-q"])).exitCode).toBe(0);
   mkdirSync(join(workDir, "src/deep"), { recursive: true });
   writeFileSync(join(workDir, "src/deep/a.ts"), "export const a = 1\n");
 
-  const added = capn(
+  const added = await capn(
     ["chart", "Where is deep A?", "--files", "a.ts"],
     "",
     join(workDir, "src/deep")
@@ -313,25 +331,28 @@ test("chart from a subdirectory stores root-relative POSIX file paths", () => {
   });
 });
 
-test("ask returns a charted entry through BM25", () => {
+test("ask returns a charted entry through BM25", async () => {
+  const { workDir, capn, initNoEmbedding } = workspace();
   mkdirSync(join(workDir, "src"), { recursive: true });
   writeFileSync(
     join(workDir, "src/payments.ts"),
     "export const webhook = true\n"
   );
-  initNoEmbedding();
+  await initNoEmbedding();
   expect(
-    capn([
-      "chart",
-      "Where are payment webhooks handled?",
-      "--files",
-      "src/payments.ts",
-      "--details",
-      "They are handled in src/payments.ts.",
-    ]).exitCode
+    (
+      await capn([
+        "chart",
+        "Where are payment webhooks handled?",
+        "--files",
+        "src/payments.ts",
+        "--details",
+        "They are handled in src/payments.ts.",
+      ])
+    ).exitCode
   ).toBe(0);
 
-  const asked = capn(["ask", "payment webhooks"]);
+  const asked = await capn(["ask", "payment webhooks"]);
 
   expect(asked.exitCode, asked.stderr.toString()).toBe(0);
   const hits = parseJSONLines(asked.stdout.toString());
@@ -347,20 +368,23 @@ test("ask returns a charted entry through BM25", () => {
   expect(hits[0].score).toBeLessThanOrEqual(100);
 });
 
-test("ask omits details when a charted entry has none", () => {
+test("ask omits details when a charted entry has none", async () => {
+  const { workDir, capn, initNoEmbedding } = workspace();
   mkdirSync(join(workDir, "src"), { recursive: true });
   writeFileSync(join(workDir, "src/empty.ts"), "export const empty = true\n");
-  initNoEmbedding();
+  await initNoEmbedding();
   expect(
-    capn([
-      "chart",
-      "Where is empty-details-keyword?",
-      "--files",
-      "src/empty.ts",
-    ]).exitCode
+    (
+      await capn([
+        "chart",
+        "Where is empty-details-keyword?",
+        "--files",
+        "src/empty.ts",
+      ])
+    ).exitCode
   ).toBe(0);
 
-  const asked = capn(["ask", "empty-details-keyword"]);
+  const asked = await capn(["ask", "empty-details-keyword"]);
 
   expect(asked.exitCode, asked.stderr.toString()).toBe(0);
   const hit = parseJSONLines(asked.stdout.toString())[0];
@@ -373,17 +397,19 @@ test("ask omits details when a charted entry has none", () => {
   expect("details" in hit).toBe(false);
 });
 
-test("ask prunes stale entries before recall and prints the miss contract", () => {
+test("ask prunes stale entries before recall and prints the miss contract", async () => {
+  const { workDir, capn, initNoEmbedding } = workspace();
   mkdirSync(join(workDir, "src"), { recursive: true });
   writeFileSync(join(workDir, "src/stale.ts"), "export const stale = 1\n");
-  initNoEmbedding();
+  await initNoEmbedding();
   expect(
-    capn(["chart", "Where is stale?", "--files", "src/stale.ts"]).exitCode
+    (await capn(["chart", "Where is stale?", "--files", "src/stale.ts"]))
+      .exitCode
   ).toBe(0);
   const id = entryId("Where is stale?");
   writeFileSync(join(workDir, "src/stale.ts"), "export const stale = 2\n");
 
-  const asked = capn(["ask", "Where is stale?"]);
+  const asked = await capn(["ask", "Where is stale?"]);
 
   expect(asked.exitCode).toBe(1);
   expect(asked.stdout.toString()).toBe("");
@@ -393,10 +419,11 @@ test("ask prunes stale entries before recall and prints the miss contract", () =
   expect(existsSync(join(workDir, ".capn/entries", `${id}.md`))).toBe(false);
 });
 
-test("ask with no hits prints the no-charted-answer contract", () => {
-  initNoEmbedding();
+test("ask with no hits prints the no-charted-answer contract", async () => {
+  const { capn, initNoEmbedding } = workspace();
+  await initNoEmbedding();
 
-  const asked = capn(["ask", "where is the compass?"]);
+  const asked = await capn(["ask", "where is the compass?"]);
 
   expect(asked.exitCode).toBe(1);
   expect(asked.stdout.toString()).toBe("");
@@ -405,18 +432,19 @@ test("ask with no hits prints the no-charted-answer contract", () => {
   );
 });
 
-test("bust removes entries that cite a file", () => {
+test("bust removes entries that cite a file", async () => {
+  const { workDir, capn } = workspace();
   mkdirSync(join(workDir, "src"), { recursive: true });
   writeFileSync(join(workDir, "src/a.ts"), "a\n");
   writeFileSync(join(workDir, "src/b.ts"), "b\n");
-  expect(capn(["chart", "Where is A?", "--files", "src/a.ts"]).exitCode).toBe(
-    0
-  );
-  expect(capn(["chart", "Where is B?", "--files", "src/b.ts"]).exitCode).toBe(
-    0
-  );
+  expect(
+    (await capn(["chart", "Where is A?", "--files", "src/a.ts"])).exitCode
+  ).toBe(0);
+  expect(
+    (await capn(["chart", "Where is B?", "--files", "src/b.ts"])).exitCode
+  ).toBe(0);
 
-  const busted = capn(["bust", "src/a.ts"]);
+  const busted = await capn(["bust", "src/a.ts"]);
 
   expect(busted.exitCode).toBe(0);
   expect(busted.stdout.toString()).toBe("busted 1 entries\n");
@@ -431,15 +459,16 @@ test("bust removes entries that cite a file", () => {
   });
 });
 
-test("prune is quiet on no-op, reports stale entries, and rebuilds map.json", () => {
+test("prune is quiet on no-op, reports stale entries, and rebuilds map.json", async () => {
+  const { workDir, capn } = workspace();
   mkdirSync(join(workDir, "src"), { recursive: true });
   writeFileSync(join(workDir, "src/a.ts"), "a\n");
-  expect(capn(["chart", "Where is A?", "--files", "src/a.ts"]).exitCode).toBe(
-    0
-  );
+  expect(
+    (await capn(["chart", "Where is A?", "--files", "src/a.ts"])).exitCode
+  ).toBe(0);
   rmSync(join(workDir, ".capn/map.json"));
 
-  const fresh = capn(["prune"]);
+  const fresh = await capn(["prune"]);
   expect(fresh.exitCode).toBe(0);
   expect(fresh.stdout.toString()).toBe("");
   expect(readJSON(join(workDir, ".capn/map.json"))).toEqual({
@@ -450,31 +479,32 @@ test("prune is quiet on no-op, reports stale entries, and rebuilds map.json", ()
   });
 
   writeFileSync(join(workDir, ".capn/map.json"), "{nope");
-  const rebuilt = capn(["bust", "src/missing.ts"]);
+  const rebuilt = await capn(["bust", "src/missing.ts"]);
   expect(rebuilt.exitCode).toBe(0);
   expect(readJSON(join(workDir, ".capn/map.json"))["src/a.ts"].entries).toEqual(
     [entryId("Where is A?")]
   );
 
   writeFileSync(join(workDir, "src/a.ts"), "changed\n");
-  const stale = capn(["prune"]);
+  const stale = await capn(["prune"]);
   expect(stale.exitCode).toBe(0);
   expect(stale.stdout.toString()).toBe("pruned 1 stale entries\n");
   expect(readJSON(join(workDir, ".capn/map.json"))).toEqual({});
 });
 
-test("unchart removes an entry by id and rejects unknown ids", () => {
+test("unchart removes an entry by id and rejects unknown ids", async () => {
+  const { workDir, capn } = workspace();
   mkdirSync(join(workDir, "src"), { recursive: true });
   writeFileSync(join(workDir, "src/a.ts"), "a\n");
-  expect(capn(["chart", "Where is A?", "--files", "src/a.ts"]).exitCode).toBe(
-    0
-  );
+  expect(
+    (await capn(["chart", "Where is A?", "--files", "src/a.ts"])).exitCode
+  ).toBe(0);
 
-  const unknown = capn(["unchart", "ffffffff"]);
+  const unknown = await capn(["unchart", "ffffffff"]);
   expect(unknown.exitCode).toBe(1);
   expect(unknown.stderr.toString()).toContain("unknown id: ffffffff");
 
-  const deleted = capn(["unchart", entryId("Where is A?")]);
+  const deleted = await capn(["unchart", entryId("Where is A?")]);
   expect(deleted.exitCode).toBe(0);
   expect(
     existsSync(join(workDir, ".capn/entries", `${entryId("Where is A?")}.md`))
@@ -482,22 +512,25 @@ test("unchart removes an entry by id and rejects unknown ids", () => {
   expect(readJSON(join(workDir, ".capn/map.json"))).toEqual({});
 });
 
-test("list prints entries straight from markdown files", () => {
+test("list prints entries straight from markdown files", async () => {
+  const { workDir, capn } = workspace();
   mkdirSync(join(workDir, "src"), { recursive: true });
   writeFileSync(join(workDir, "src/a.ts"), "a\n");
   expect(
-    capn([
-      "chart",
-      "Where is A?",
-      "--files",
-      "src/a.ts",
-      "--details",
-      "Line 1 has the answer.",
-    ]).exitCode
+    (
+      await capn([
+        "chart",
+        "Where is A?",
+        "--files",
+        "src/a.ts",
+        "--details",
+        "Line 1 has the answer.",
+      ])
+    ).exitCode
   ).toBe(0);
   writeFileSync(join(workDir, ".capn/map.json"), "{}");
 
-  const listed = capn(["list"]);
+  const listed = await capn(["list"]);
 
   expect(listed.exitCode).toBe(0);
   expect(listed.stdout.toString()).toContain(entryId("Where is A?"));
@@ -509,29 +542,33 @@ test("list prints entries straight from markdown files", () => {
   expect(listed.stdout.toString()).toContain("  - src/a.ts");
 });
 
-test("context prints the exact static contract", () => {
+test("context prints the exact static contract", async () => {
+  const { workDir, capn } = workspace();
   mkdirSync(join(workDir, ".capn"));
-  const result = capn(["context"]);
+  const result = await capn(["context"]);
 
   expect(result.exitCode).toBe(0);
   expect(result.stdout.toString()).toBe(contextContract);
 });
 
-test("context does not leak stored content or prune", () => {
+test("context does not leak stored content or prune", async () => {
+  const { workDir, capn } = workspace();
   mkdirSync(join(workDir, "src"), { recursive: true });
   writeFileSync(
     join(workDir, "src/context.ts"),
     "export const contextSentinel = 1\n"
   );
   expect(
-    capn([
-      "chart",
-      "Where is context sentinel?",
-      "--files",
-      "src/context.ts",
-      "--details",
-      "chart-context-sentinel lives in src/context.ts",
-    ]).exitCode
+    (
+      await capn([
+        "chart",
+        "Where is context sentinel?",
+        "--files",
+        "src/context.ts",
+        "--details",
+        "chart-context-sentinel lives in src/context.ts",
+      ])
+    ).exitCode
   ).toBe(0);
   const id = entryId("Where is context sentinel?");
   writeFileSync(
@@ -543,7 +580,7 @@ test("context does not leak stored content or prune", () => {
     "export const contextSentinel = 2\n"
   );
 
-  const result = capn(["context"]);
+  const result = await capn(["context"]);
 
   expect(result.exitCode).toBe(0);
   expect(result.stdout.toString()).not.toContain("chart-context-sentinel");
@@ -551,10 +588,13 @@ test("context does not leak stored content or prune", () => {
   expect(existsSync(join(workDir, ".capn/entries", `${id}.md`))).toBe(true);
 });
 
-test("init is idempotent and installs QMD SDK storage, hooks, gitignore, config, and post-commit pruning", () => {
-  expect(run(["git", "init", "-q"]).exitCode).toBe(0);
-  expect(run(["git", "config", "user.email", "t@t.co"]).exitCode).toBe(0);
-  expect(run(["git", "config", "user.name", "t"]).exitCode).toBe(0);
+test("init is idempotent and installs QMD SDK storage, hooks, gitignore, config, and post-commit pruning", async () => {
+  const { workDir, capn, run } = workspace();
+  expect((await run(["git", "init", "-q"])).exitCode).toBe(0);
+  expect((await run(["git", "config", "user.email", "t@t.co"])).exitCode).toBe(
+    0
+  );
+  expect((await run(["git", "config", "user.name", "t"])).exitCode).toBe(0);
 
   mkdirSync(join(workDir, ".claude"), { recursive: true });
   writeFileSync(
@@ -584,9 +624,9 @@ test("init is idempotent and installs QMD SDK storage, hooks, gitignore, config,
     "dist/\n.capn/qmd/\n.capn/journal/\n.capn/MIND.md\n"
   );
 
-  const first = capn(["init", "--git", "--no-embedding"]);
+  const first = await capn(["init", "--git", "--no-embedding"]);
   expect(first.exitCode, first.stderr.toString()).toBe(0);
-  const second = capn(["init", "--git", "--no-embedding"]);
+  const second = await capn(["init", "--git", "--no-embedding"]);
   expect(second.exitCode, second.stderr.toString()).toBe(0);
   expect(first.stdout.toString()).toContain("qmd capn collection");
 
@@ -686,16 +726,18 @@ test("init is idempotent and installs QMD SDK storage, hooks, gitignore, config,
   mkdirSync(join(workDir, "src"), { recursive: true });
   writeFileSync(join(workDir, "src/a.ts"), "export const x = 1\n");
   expect(
-    capn([
-      "chart",
-      "Where is X?",
-      "--files",
-      "src/a.ts",
-      "--details",
-      "In src/a.ts",
-    ]).exitCode
+    (
+      await capn([
+        "chart",
+        "Where is X?",
+        "--files",
+        "src/a.ts",
+        "--details",
+        "In src/a.ts",
+      ])
+    ).exitCode
   ).toBe(0);
-  const asked = capn(["ask", "Where is X?"]);
+  const asked = await capn(["ask", "Where is X?"]);
   expect(asked.exitCode, asked.stderr.toString()).toBe(0);
   expect(parseJSONLines(asked.stdout.toString())[0]).toMatchObject({
     details: "In src/a.ts",
@@ -704,11 +746,13 @@ test("init is idempotent and installs QMD SDK storage, hooks, gitignore, config,
   writeFileSync(join(workDir, "src/a.ts"), "export const x = 2\n");
 
   expect(
-    run(["git", "add", "-A"], workDir, {
-      PATH: `${binDir}:${process.env.PATH ?? ""}`,
-    }).exitCode
+    (
+      await run(["git", "add", "-A"], workDir, {
+        PATH: `${binDir}:${process.env.PATH ?? ""}`,
+      })
+    ).exitCode
   ).toBe(0);
-  const commit = run(["git", "commit", "-m", "x"], workDir, {
+  const commit = await run(["git", "commit", "-m", "x"], workDir, {
     PATH: `${binDir}:${process.env.PATH ?? ""}`,
   });
   expect(commit.exitCode, commit.stderr.toString()).toBe(0);
@@ -718,7 +762,8 @@ test("init is idempotent and installs QMD SDK storage, hooks, gitignore, config,
   ).toBe(false);
 });
 
-test("init migrates old Stop nudge hooks without disturbing unrelated Stop hooks", () => {
+test("init migrates old Stop nudge hooks without disturbing unrelated Stop hooks", async () => {
+  const { workDir, initNoEmbedding } = workspace();
   const oldNudgeGroup = {
     hooks: [{ type: "command", command: "capn nudge" }],
   };
@@ -762,8 +807,8 @@ test("init migrates old Stop nudge hooks without disturbing unrelated Stop hooks
     })
   );
 
-  initNoEmbedding();
-  initNoEmbedding();
+  await initNoEmbedding();
+  await initNoEmbedding();
 
   const claudeSettings = readJSON(join(workDir, ".claude/settings.json"));
   const settings = readJSON(join(workDir, ".claude/settings.local.json"));
@@ -813,7 +858,8 @@ test("init migrates old Stop nudge hooks without disturbing unrelated Stop hooks
   expect(JSON.stringify(codexHooks)).not.toContain("capn nudge");
 });
 
-test("capn qmd storage coexists with an existing host qmd project", () => {
+test("capn qmd storage coexists with an existing host qmd project", async () => {
+  const { workDir, capn, qmd, initNoEmbedding } = workspace();
   mkdirSync(join(workDir, "docs"), { recursive: true });
   writeFileSync(
     join(workDir, "docs/host.md"),
@@ -825,9 +871,9 @@ test("capn qmd storage coexists with an existing host qmd project", () => {
     ? readFileSync(hostConfigPath, "utf8")
     : undefined;
 
-  const hostInit = qmd(["init"]);
+  const hostInit = await qmd(["init"]);
   expect(hostInit.exitCode, hostInit.stderr.toString()).toBe(0);
-  const hostAdd = qmd([
+  const hostAdd = await qmd([
     "collection",
     "add",
     join(workDir, "docs"),
@@ -835,26 +881,28 @@ test("capn qmd storage coexists with an existing host qmd project", () => {
     "hostdocs",
   ]);
   expect(hostAdd.exitCode, hostAdd.stderr.toString()).toBe(0);
-  const hostUpdate = qmd(["update"]);
+  const hostUpdate = await qmd(["update"]);
   expect(hostUpdate.exitCode, hostUpdate.stderr.toString()).toBe(0);
   const hostIndexPath = join(workDir, ".qmd/index.yml");
   const hostIndex = readFileSync(hostIndexPath);
   expect(dotQMDDirs(workDir)).toEqual([".qmd"]);
 
-  initNoEmbedding();
+  await initNoEmbedding();
   mkdirSync(join(workDir, "src"), { recursive: true });
   writeFileSync(join(workDir, "src/capn.ts"), "export const capn = true\n");
   expect(
-    capn([
-      "chart",
-      "Where is capn-sdk-keyword recorded?",
-      "--files",
-      "src/capn.ts",
-      "--details",
-      "capn-sdk-keyword lives in src/capn.ts.",
-    ]).exitCode
+    (
+      await capn([
+        "chart",
+        "Where is capn-sdk-keyword recorded?",
+        "--files",
+        "src/capn.ts",
+        "--details",
+        "capn-sdk-keyword lives in src/capn.ts.",
+      ])
+    ).exitCode
   ).toBe(0);
-  const asked = capn(["ask", "capn-sdk-keyword"]);
+  const asked = await capn(["ask", "capn-sdk-keyword"]);
   expect(asked.exitCode, asked.stderr.toString()).toBe(0);
   expect(parseJSONLines(asked.stdout.toString())[0]).toMatchObject({
     details: "capn-sdk-keyword lives in src/capn.ts.",
@@ -863,13 +911,13 @@ test("capn qmd storage coexists with an existing host qmd project", () => {
   expect(asked.stdout.toString()).not.toContain("host-lighthouse-keyword");
 
   expect(readFileSync(hostIndexPath)).toEqual(hostIndex);
-  const hostCollections = qmd(["collection", "list"]);
+  const hostCollections = await qmd(["collection", "list"]);
   expect(hostCollections.exitCode, hostCollections.stderr.toString()).toBe(0);
   expect(hostCollections.stdout.toString()).toContain("hostdocs");
   expect(hostCollections.stdout.toString()).not.toContain("capn");
   expect(hostCollections.stdout.toString()).not.toContain("journal");
 
-  const hostAskedByCapn = capn(["ask", "host-lighthouse-keyword"]);
+  const hostAskedByCapn = await capn(["ask", "host-lighthouse-keyword"]);
   expect(hostAskedByCapn.exitCode).toBe(1);
   expect(hostAskedByCapn.stdout.toString()).toBe("");
   expect(hostAskedByCapn.stderr.toString()).toContain("No charted answer.");
@@ -878,7 +926,7 @@ test("capn qmd storage coexists with an existing host qmd project", () => {
     "host-lighthouse-keyword lives"
   );
 
-  const capnAskedByHost = qmd(["search", "capn-sdk-keyword"]);
+  const capnAskedByHost = await qmd(["search", "capn-sdk-keyword"]);
   expect(capnAskedByHost.exitCode, capnAskedByHost.stderr.toString()).toBe(0);
   expect(capnAskedByHost.stdout.toString()).not.toContain("capn-sdk-keyword");
   expect(capnAskedByHost.stdout.toString()).not.toContain("src/capn.ts");
