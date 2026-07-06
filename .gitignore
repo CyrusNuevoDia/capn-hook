@@ -1,8 +1,45 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.DocumentRevisions-V100/
+.Spotlight-V100/
+.TemporaryItems/
+.Trashes/
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.fseventsd/
+
+# Local env and secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+!.env.template
+!.env.*.template
+
+# Dependencies
 node_modules/
+
+# Build, test, and tool output
 dist/
+coverage/
+*.tsbuildinfo
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+bun-debug.log*
+
+# Agent and memory state
 .qmd/
 .codex/
 .capn/
+
+# Eval sandboxes
 eval/repos/
 eval/runs/work/
 eval/runs/.capnbin/
