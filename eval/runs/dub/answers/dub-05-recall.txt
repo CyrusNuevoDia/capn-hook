@@ -1,0 +1,1 @@
+Workspace API auth is centered in `apps/web/lib/auth/workspace.ts`: `withWorkspace` handles `Authorization: Bearer` API keys, session fallback, scoped token permissions, and rate limiting. The supporting pieces are `apps/web/lib/api/tokens/scopes.ts`, `apps/web/lib/api/tokens/throw-if-no-access.ts`, and `apps/web/lib/api/get-ratelimit-for-plan.ts`.

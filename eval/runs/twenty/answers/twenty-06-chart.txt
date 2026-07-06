@@ -1,0 +1,3 @@
+The SSO sign-in flow is handled in `packages/twenty-front/src/modules/auth/sign-in-up/hooks/useSSO.ts`, `packages/twenty-server/src/engine/core-modules/auth/controllers/sso-auth.controller.ts`, `packages/twenty-server/src/engine/core-modules/auth/services/auth-sso.service.ts`, and `packages/twenty-server/src/engine/core-modules/sso/services/sso.service.ts`.
+
+The frontend hook gets the authorization URL and redirects; the controller starts/catches OIDC/SAML callbacks; `AuthSsoService` resolves the workspace for SSO sign-in; and `SSOService` persists/loads identity providers and builds issuer/callback/login URLs.

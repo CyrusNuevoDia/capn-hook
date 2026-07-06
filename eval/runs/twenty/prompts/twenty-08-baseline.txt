@@ -1,0 +1,1 @@
+Task: Where is the record index table assembled from the current view metadata into query params, table wrappers, and per-cell field-context rendering? Answer in one or two sentences naming the specific file(s).

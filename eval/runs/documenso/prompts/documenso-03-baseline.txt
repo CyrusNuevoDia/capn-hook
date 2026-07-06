@@ -1,0 +1,1 @@
+Task: Where is a new envelope created from uploaded files, including conversion/normalization, placeholder extraction, field placement, and audit logging? Answer in one or two sentences naming the specific file(s).

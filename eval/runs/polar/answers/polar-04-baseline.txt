@@ -1,0 +1,3 @@
+The renewal cycle starts in `server/polar/subscription/tasks.py` (`subscription.cycle`) and the main lifecycle work is in `server/polar/subscription/service.py` (`SubscriptionService.cycle`): it applies pending updates, advances billing periods, handles cancellation revocation, and enqueues `order.create_subscription_order`.
+
+The renewal order is created in `server/polar/order/tasks.py` / `server/polar/order/service.py`, and paid renewal orders enqueue benefit cycling via `benefit.enqueue_benefit_grant_cycles`, implemented in `server/polar/benefit/tasks.py` and `server/polar/benefit/grant/service.py`; subscription benefit revocation is routed from `server/polar/subscription/service.py` through `enqueue_benefits_grants`.

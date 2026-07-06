@@ -1,0 +1,1 @@
+Task: Where is the per-workspace GraphQL schema assembled from object metadata into query roots and object/input types? Answer in one or two sentences naming the specific file(s).

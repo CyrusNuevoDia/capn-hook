@@ -1,0 +1,1 @@
+Task: Where are signing invitation emails assembled and sent after a document is distributed? Answer in one or two sentences naming the specific file(s).

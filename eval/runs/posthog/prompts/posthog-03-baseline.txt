@@ -1,0 +1,1 @@
+Task: When an ingested $identify or $create_alias event causes two persons to merge, which files show how the ingestion pipeline chooses the merge path, handles limit/race outcomes, and builds the committed person-merge Kafka message for downstream consumers? Answer in one or two sentences naming the specific file(s).

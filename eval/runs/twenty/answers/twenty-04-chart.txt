@@ -1,0 +1,3 @@
+Selected GraphQL fields are parsed in `packages/twenty-server/src/engine/api/graphql/graphql-query-runner/graphql-query-parsers/graphql-query-selected-fields/graphql-selected-fields.parser.ts`, with relation recursion in `graphql-selected-fields-relation.parser.ts`, called through `graphql-query.parser.ts`.
+
+Those parsed `select`/`relations` are turned into DB columns by `packages/twenty-server/src/engine/api/graphql/graphql-query-runner/utils/build-columns-to-select.ts` and applied for dynamic record queries in `packages/twenty-server/src/engine/api/common/common-query-runners/common-find-many-query-runner.service.ts`; `build-columns-to-return.ts` is the sibling for return-column lists.

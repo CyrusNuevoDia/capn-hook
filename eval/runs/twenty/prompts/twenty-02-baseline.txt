@@ -1,0 +1,1 @@
+Task: Where is a metadata change validated, converted into workspace migration actions, and run against a workspace schema? Answer in one or two sentences naming the specific file(s).

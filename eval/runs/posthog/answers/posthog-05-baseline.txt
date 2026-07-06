@@ -1,0 +1,3 @@
+The path is shown in `frontend/src/queries/nodes/InsightViz/InsightViz.tsx`, which passes `query.source` into `dataNodeLogic`, then `frontend/src/queries/nodes/DataNode/dataNodeLogic.ts`, `frontend/src/queries/query.ts`, and `frontend/src/lib/api.ts`, which carry `filtersOverride` / `variablesOverride` into the `/query` POST body.
+
+On the backend, `posthog/api/query.py` parses/applies those overrides and calls `process_query_model`; `posthog/api/services/query.py` dispatches to the runner, with `posthog/hogql_queries/query_runner.py` showing how wrapper nodes like `InsightVizNode` resolve to their `source` runner.

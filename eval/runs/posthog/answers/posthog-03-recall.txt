@@ -1,0 +1,1 @@
+The files are `nodejs/src/ingestion/common/persons/person-merge-service.ts`, `person-event-processor.ts`, `person-merge-types.ts`, `person-context.ts`, and `person-merge-event.ts`. Together they show the identify/alias merge routing, limit/race handling, and construction/emission of the committed `person_merge_events` Kafka message.

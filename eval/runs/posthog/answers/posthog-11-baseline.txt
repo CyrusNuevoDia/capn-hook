@@ -1,0 +1,3 @@
+The wizard side is backed by `frontend/src/scenes/surveys/wizard/SurveyWizard.tsx`, `frontend/src/scenes/surveys/wizard/surveyWizardLogic.ts`, `frontend/src/scenes/surveys/wizard/SurveyAudienceFilters.tsx`, and `frontend/src/scenes/surveys/wizard/steps/WhenStep.tsx`.
+
+Persistence and internal feature flag creation live in `products/surveys/backend/api/survey.py` and `products/surveys/backend/models.py`; response stopping/throttling is handled by `posthog/tasks/stop_surveys_reached_target.py` and `posthog/tasks/update_survey_adaptive_sampling.py`.

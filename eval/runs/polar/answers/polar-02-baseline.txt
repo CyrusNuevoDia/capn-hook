@@ -1,0 +1,3 @@
+Incoming Stripe webhooks are signature-verified in `server/polar/integrations/stripe/endpoints.py` via `WebhookEventGetter`, then stored/enqueued as `ExternalEventSource.stripe` through `server/polar/external_event/service.py`.
+
+The typed background actors that consume them live in `server/polar/integrations/stripe/tasks.py`, with actor names like `stripe.webhook.payment_intent.succeeded`.

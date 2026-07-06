@@ -1,0 +1,1 @@
+Tracked leads enqueue partner commission workflow jobs in `apps/web/lib/api/conversions/track-lead.ts`; tracked sales do the same in `apps/web/lib/api/conversions/track-sale.ts`. Both call `queuePartnerCommissionCreation`, whose QStash workflow creation lives in `apps/web/lib/partners/queue-partner-commission-creation.ts`.

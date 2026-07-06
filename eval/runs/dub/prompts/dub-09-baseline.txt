@@ -1,0 +1,1 @@
+Task: Where are link.clicked webhooks drained from the Redis click stream and filtered by workspace, link, or folder scope before delivery? Answer in one or two sentences naming the specific file(s).

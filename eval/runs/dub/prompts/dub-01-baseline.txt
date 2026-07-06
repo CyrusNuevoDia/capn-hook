@@ -1,0 +1,1 @@
+Task: When a short link resolves, where is the final destination URL chosen across bot proxying, custom URI schemes, iOS/Android targeting, and geo targeting? Answer in one or two sentences naming the specific file(s).

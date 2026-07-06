@@ -1,0 +1,1 @@
+Task: For a normal analytics capture event, which code path turns the Rust capture request into a Kafka message that Node later serializes for the ClickHouse events table, including the final Kafka-engine schema that consumes it? Answer in one or two sentences naming the specific file(s).

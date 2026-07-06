@@ -1,0 +1,1 @@
+Task: Where is switching a billing plan handled across the settings UI hook, the GraphQL billing resolver, the subscription service, and the Stripe checkout integration? Answer in one or two sentences naming the specific file(s).

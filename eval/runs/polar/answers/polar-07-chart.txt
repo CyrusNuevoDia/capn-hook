@@ -1,0 +1,1 @@
+Outgoing webhook selection and event creation live in `server/polar/webhook/service.py`, while raw/Discord/Slack payload serialization lives in `server/polar/webhook/webhooks.py`. Signing, HTTP delivery, retry handling, and the FIFO guard are in `server/polar/webhook/tasks.py`, with `server/polar/webhook/repository.py` backing the “earlier pending event” query.

@@ -1,0 +1,1 @@
+Task: For a FunnelsQuery in steps mode with breakdowns, which files show how the backend normalizes funnel context, chooses the funnel runner, builds the aggregate_funnel UDF query, and executes it as HogQL against ClickHouse? Answer in one or two sentences naming the specific file(s).

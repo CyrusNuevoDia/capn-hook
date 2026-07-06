@@ -1,0 +1,1 @@
+Task: Where are seller payout eligibility, Stripe/manual payout account state, payout transaction creation, and payout reversals handled? Answer in one or two sentences naming the specific file(s).

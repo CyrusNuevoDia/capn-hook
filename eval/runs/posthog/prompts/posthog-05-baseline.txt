@@ -1,0 +1,1 @@
+Task: When an InsightVizNode is rendered in the frontend, which files show how its source query is handed to the data-node loader, posted to the /query API with dashboard filter and variable overrides, and then dispatched into the backend query-runner pipeline? Answer in one or two sentences naming the specific file(s).

@@ -1,0 +1,3 @@
+Gmail message import is handled in `packages/twenty-server/src/modules/messaging/message-import-manager`: `services/messaging-message-list-fetch.service.ts` calls `services/messaging-get-message-list.service.ts`, which dispatches to `drivers/gmail/services/gmail-get-message-list.service.ts`; that applies excluded-label search via `drivers/gmail/utils/compute-gmail-exclude-search-filter.util.ts` before caching message IDs.
+
+The saved-message path continues through `services/messaging-messages-import.service.ts` and `services/messaging-get-messages.service.ts` into `drivers/gmail/services/gmail-get-messages.service.ts`, then saves through `services/messaging-save-messages-and-enqueue-contact-creation.service.ts` and `services/messaging-message.service.ts`.

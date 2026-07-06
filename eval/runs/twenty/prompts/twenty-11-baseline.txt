@@ -1,0 +1,1 @@
+Task: Where are calendar-event visibility restrictions enforced before timeline calendar events are returned to the frontend for an object record? Answer in one or two sentences naming the specific file(s).

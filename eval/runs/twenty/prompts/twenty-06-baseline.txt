@@ -1,0 +1,1 @@
+Task: Where is the SSO sign-in flow handled across the frontend SSO hook, the auth SSO controller, the SSO auth service, and the persisted identity-provider service? Answer in one or two sentences naming the specific file(s).

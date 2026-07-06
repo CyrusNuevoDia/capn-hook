@@ -1,0 +1,3 @@
+This is all orchestrated in [server/polar/checkout/service.py](/Users/knrz/Git/CyrusNuevoDia/capn-hook/eval/runs/work/polar-baseline/server/polar/checkout/service.py:946): `CheckoutService.confirm()` / `_confirm_inner()` validates required buyer fields, calls `_update_checkout_tax()` for tax, creates Stripe PaymentIntent/SetupIntent with `confirm=True`, and enqueues `checkout.handle_free_success` for free/no-payment-form checkouts.
+
+The low-level Stripe API call wrapper lives in [server/polar/integrations/stripe/service.py](/Users/knrz/Git/CyrusNuevoDia/capn-hook/eval/runs/work/polar-baseline/server/polar/integrations/stripe/service.py:352).

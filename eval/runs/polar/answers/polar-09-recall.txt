@@ -1,0 +1,1 @@
+Product price shapes are validated at creation in `server/polar/product/service.py`, mainly via `get_validated_prices`, with shape helpers in `server/polar/product/price_set.py`. Checkout selection and enforcement for currency, custom pricing, seat pricing, and upfront amount happens in `server/polar/checkout/service.py`, using `PriceSet` from `server/polar/product/price_set.py`.

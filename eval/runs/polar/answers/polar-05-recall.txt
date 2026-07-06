@@ -1,0 +1,1 @@
+Pending subscription billing entries are handled in `server/polar/billing_entry/service.py`, where `create_order_items_from_pending` turns them into `OrderItem`s and links the entries. The order is then taxed, paid, and meter-reset logic runs through `server/polar/order/service.py`, with `server/polar/order/tasks.py` invoking subscription order creation asynchronously.

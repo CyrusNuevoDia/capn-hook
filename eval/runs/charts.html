@@ -1,0 +1,1097 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Capn Hook Token Savings Evaluation</title>
+<style>
+:root{color-scheme:light dark;--bg:#f8f7f3;--text:#191a1d;--muted:#62666f;--rule:#d8d3c8;--baseline:#4b5563;--recall:#0077a3;--accent:#7a4f00;--panel:#fff}
+@media (prefers-color-scheme:dark){:root{--bg:#121416;--text:#f1eee7;--muted:#aaa69b;--rule:#363a3f;--baseline:#aeb6c2;--recall:#36aee2;--accent:#e2b35f;--panel:#171a1e}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{width:min(1180px,calc(100% - 32px));margin:0 auto;padding:32px 0 48px}header{border-bottom:1px solid var(--rule);padding-bottom:18px}h1{margin:0 0 6px;font-size:clamp(1.8rem,4vw,3.2rem);line-height:1;letter-spacing:0}.subtitle{margin:0;color:var(--muted);max-width:70ch}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;margin:20px 0 8px;border:1px solid var(--rule);background:var(--rule)}.hit-diagnostic{margin:0 0 34px;color:var(--muted);font-size:.82rem}.stat{min-height:76px;padding:12px 14px;background:var(--panel)}.stat strong{display:block;font-size:1.35rem;line-height:1.15}.stat span{display:block;margin-top:4px;color:var(--muted);font-size:.86rem}section{margin-top:34px}h2{margin:0 0 14px;font-size:1.12rem;letter-spacing:0}.scroll{max-width:100%;overflow-x:auto;padding-bottom:4px}.hero-chart{min-width:780px;border-bottom:1px solid var(--rule);padding:8px 4px 0}.hero-bars{display:grid;grid-template-columns:repeat(5,minmax(120px,1fr));gap:22px;align-items:end;height:360px}.repo-group{display:grid;grid-template-rows:auto 1fr auto;min-width:0;height:100%}.savings{color:var(--accent);font-weight:700;text-align:center;white-space:nowrap}.bars{display:flex;align-items:end;justify-content:center;gap:10px;min-height:0;border-bottom:1px solid var(--text)}.bar-wrap{display:flex;flex-direction:column;align-items:center;justify-content:end;width:42%;height:100%;min-width:36px}.bar{width:100%;min-height:1px}.baseline{background:var(--baseline)}.recall{background:var(--recall)}.value{margin-bottom:4px;color:var(--muted);font-size:.75rem;white-space:nowrap}.repo-name{padding-top:8px;color:var(--text);font-weight:700;text-align:center}.axis-note,.key{color:var(--muted);font-size:.82rem}.key{display:flex;gap:18px;margin-bottom:12px}.key span::before{content:"";display:inline-block;width:.8rem;height:.8rem;margin-right:.4rem;vertical-align:-.08rem}.key .baseline-key::before{background:var(--baseline)}.key .recall-key::before{background:var(--recall)}.panels{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:28px}.panel{border-top:1px solid var(--rule);padding-top:12px}.panel-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:10px}.panel h3{margin:0;font-size:1rem}.panel-meta{color:var(--muted);font-size:.8rem;white-space:nowrap}.case-chart{min-width:520px}.case-row{display:grid;grid-template-columns:minmax(88px,120px) 1fr auto;gap:10px;align-items:center;margin:8px 0}.case-label{overflow:hidden;color:var(--muted);font-size:.78rem;text-overflow:ellipsis;white-space:nowrap}.case-bars{display:grid;gap:3px}.hbar{height:11px;min-width:1px}.case-values{color:var(--muted);font-size:.75rem;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}footer{margin-top:36px;color:var(--muted);font-size:.8rem}@media (max-width:720px){main{width:min(100% - 20px,1180px);padding-top:20px}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.hero-bars{height:300px;gap:16px}}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Token Savings Evaluation</h1>
+    <p class="subtitle">Capn Hook recall cuts token cost while preserving answer correctness across five repositories.</p>
+  </header>
+  <div class="stats" id="stats"></div>
+  <p class="hit-diagnostic" id="hit-diagnostic"></p>
+  <section>
+    <h2>Cross-repo mean tokens</h2>
+    <div class="key"><span class="baseline-key">baseline</span><span class="recall-key">recall</span></div>
+    <div class="scroll"><div class="hero-chart" id="hero"></div></div>
+    <p class="axis-note" id="axis-note"></p>
+  </section>
+  <section>
+    <h2>Case-level savings</h2>
+    <div class="panels" id="panels"></div>
+  </section>
+  <footer id="generated"></footer>
+</main>
+<script>
+const SUMMARY = {
+  "generatedAt": "2026-07-06T03:44:48.722Z",
+  "repos": [
+    {
+      "slug": "dub",
+      "commit": "51e5a8fd38923d8ae83c215a9e82b8994a81d4c7",
+      "cases": [
+        {
+          "caseId": "dub-01",
+          "label": "redirect",
+          "difficulty": "hard",
+          "baselineTokens": 218334,
+          "chartTokens": 283003,
+          "recallTokens": 92890,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 57.5
+        },
+        {
+          "caseId": "dub-02",
+          "label": "click-ingestion",
+          "difficulty": "hard",
+          "baselineTokens": 162482,
+          "chartTokens": 155827,
+          "recallTokens": 44137,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 72.8
+        },
+        {
+          "caseId": "dub-03",
+          "label": "analytics",
+          "difficulty": "hard",
+          "baselineTokens": 204490,
+          "chartTokens": 157955,
+          "recallTokens": 44040,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 78.5
+        },
+        {
+          "caseId": "dub-04",
+          "label": "billing",
+          "difficulty": "hard",
+          "baselineTokens": 199608,
+          "chartTokens": 158517,
+          "recallTokens": 44261,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 77.8
+        },
+        {
+          "caseId": "dub-05",
+          "label": "api-auth",
+          "difficulty": "hard",
+          "baselineTokens": 241209,
+          "chartTokens": 278615,
+          "recallTokens": 44048,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 81.7
+        },
+        {
+          "caseId": "dub-06",
+          "label": "api-auth",
+          "difficulty": "medium",
+          "baselineTokens": 152966,
+          "chartTokens": 194272,
+          "recallTokens": 44066,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 71.2
+        },
+        {
+          "caseId": "dub-07",
+          "label": "domains",
+          "difficulty": "medium",
+          "baselineTokens": 130991,
+          "chartTokens": 233872,
+          "recallTokens": 44094,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 66.3
+        },
+        {
+          "caseId": "dub-08",
+          "label": "link-crud",
+          "difficulty": "hard",
+          "baselineTokens": 261673,
+          "chartTokens": 169943,
+          "recallTokens": 43953,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 83.2
+        },
+        {
+          "caseId": "dub-09",
+          "label": "webhooks",
+          "difficulty": "hard",
+          "baselineTokens": 198814,
+          "chartTokens": 233837,
+          "recallTokens": 44144,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 77.8
+        },
+        {
+          "caseId": "dub-10",
+          "label": "partners",
+          "difficulty": "hard",
+          "baselineTokens": 277355,
+          "chartTokens": 211455,
+          "recallTokens": 44125,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 84.1
+        },
+        {
+          "caseId": "dub-11",
+          "label": "payouts",
+          "difficulty": "hard",
+          "baselineTokens": 141555,
+          "chartTokens": 253348,
+          "recallTokens": 44159,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 68.8
+        },
+        {
+          "caseId": "dub-12",
+          "label": "integrations",
+          "difficulty": "hard",
+          "baselineTokens": 252224,
+          "chartTokens": 310550,
+          "recallTokens": 44368,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 82.4
+        }
+      ],
+      "armMeans": {
+        "baseline": 203475,
+        "chart": 220100,
+        "recall": 48190
+      },
+      "savingsPct": 76.3,
+      "correctnessRates": {
+        "baseline": 1,
+        "chart": 1,
+        "recall": 1
+      },
+      "hitRate": 1,
+      "hitRateAnyRank": 1,
+      "hitRateTopRank": 1,
+      "breakEvenRecalls": 1.42
+    },
+    {
+      "slug": "polar",
+      "commit": "97e9430901a4197876318672cdd4fae99fc49a2b",
+      "cases": [
+        {
+          "caseId": "polar-01",
+          "label": "checkout",
+          "difficulty": "medium",
+          "baselineTokens": 214427,
+          "chartTokens": 206026,
+          "recallTokens": 47788,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 77.7
+        },
+        {
+          "caseId": "polar-02",
+          "label": "stripe-webhooks",
+          "difficulty": "hard",
+          "baselineTokens": 94358,
+          "chartTokens": 205752,
+          "recallTokens": 71471,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 24.3
+        },
+        {
+          "caseId": "polar-03",
+          "label": "payments-ledger",
+          "difficulty": "hard",
+          "baselineTokens": 353221,
+          "chartTokens": 210213,
+          "recallTokens": 47862,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 86.4
+        },
+        {
+          "caseId": "polar-04",
+          "label": "subscriptions",
+          "difficulty": "hard",
+          "baselineTokens": 173025,
+          "chartTokens": 253451,
+          "recallTokens": 71396,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 58.7
+        },
+        {
+          "caseId": "polar-05",
+          "label": "orders-billing",
+          "difficulty": "hard",
+          "baselineTokens": 114127,
+          "chartTokens": 262227,
+          "recallTokens": 71327,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 37.5
+        },
+        {
+          "caseId": "polar-06",
+          "label": "benefits",
+          "difficulty": "hard",
+          "baselineTokens": 115114,
+          "chartTokens": 162242,
+          "recallTokens": 47856,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 58.4
+        },
+        {
+          "caseId": "polar-07",
+          "label": "outgoing-webhooks",
+          "difficulty": "hard",
+          "baselineTokens": 151503,
+          "chartTokens": 218022,
+          "recallTokens": 47714,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 68.5
+        },
+        {
+          "caseId": "polar-08",
+          "label": "auth",
+          "difficulty": "medium",
+          "baselineTokens": 142520,
+          "chartTokens": 253333,
+          "recallTokens": 47675,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 66.5
+        },
+        {
+          "caseId": "polar-09",
+          "label": "products-prices",
+          "difficulty": "medium",
+          "baselineTokens": 440572,
+          "chartTokens": 213373,
+          "recallTokens": 47624,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 89.2
+        },
+        {
+          "caseId": "polar-10",
+          "label": "tax",
+          "difficulty": "hard",
+          "baselineTokens": 93131,
+          "chartTokens": 244176,
+          "recallTokens": 47837,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 48.6
+        },
+        {
+          "caseId": "polar-11",
+          "label": "payouts",
+          "difficulty": "hard",
+          "baselineTokens": 182496,
+          "chartTokens": 409327,
+          "recallTokens": 71228,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 61
+        },
+        {
+          "caseId": "polar-12",
+          "label": "usage-billing",
+          "difficulty": "hard",
+          "baselineTokens": 188430,
+          "chartTokens": 190086,
+          "recallTokens": 53893,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 71.4
+        }
+      ],
+      "armMeans": {
+        "baseline": 188577,
+        "chart": 235686,
+        "recall": 56139
+      },
+      "savingsPct": 70.2,
+      "correctnessRates": {
+        "baseline": 1,
+        "chart": 1,
+        "recall": 1
+      },
+      "hitRate": 1,
+      "hitRateAnyRank": 1,
+      "hitRateTopRank": 1,
+      "breakEvenRecalls": 1.78
+    },
+    {
+      "slug": "posthog",
+      "commit": "6577fc44f726da86da4288e5a8ef011571a80c47",
+      "cases": [
+        {
+          "caseId": "posthog-01",
+          "label": null,
+          "difficulty": null,
+          "baselineTokens": 497325,
+          "chartTokens": 944681,
+          "recallTokens": 166668,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": false,
+          "savingsPct": 66.5
+        },
+        {
+          "caseId": "posthog-02",
+          "label": null,
+          "difficulty": null,
+          "baselineTokens": 911891,
+          "chartTokens": 1060473,
+          "recallTokens": 56200,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 93.8
+        },
+        {
+          "caseId": "posthog-03",
+          "label": null,
+          "difficulty": null,
+          "baselineTokens": 288534,
+          "chartTokens": 325635,
+          "recallTokens": 56169,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 80.5
+        },
+        {
+          "caseId": "posthog-04",
+          "label": null,
+          "difficulty": null,
+          "baselineTokens": 170789,
+          "chartTokens": 299605,
+          "recallTokens": 56169,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 67.1
+        },
+        {
+          "caseId": "posthog-05",
+          "label": null,
+          "difficulty": null,
+          "baselineTokens": 308522,
+          "chartTokens": 565006,
+          "recallTokens": 56289,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 81.8
+        },
+        {
+          "caseId": "posthog-06",
+          "label": null,
+          "difficulty": null,
+          "baselineTokens": 267004,
+          "chartTokens": 397549,
+          "recallTokens": 56444,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": false,
+          "savingsPct": 78.9
+        },
+        {
+          "caseId": "posthog-07",
+          "label": null,
+          "difficulty": null,
+          "baselineTokens": 317313,
+          "chartTokens": 361938,
+          "recallTokens": 84103,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 73.5
+        },
+        {
+          "caseId": "posthog-08",
+          "label": null,
+          "difficulty": null,
+          "baselineTokens": 135058,
+          "chartTokens": 169291,
+          "recallTokens": 56215,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 58.4
+        },
+        {
+          "caseId": "posthog-09",
+          "label": null,
+          "difficulty": null,
+          "baselineTokens": 255388,
+          "chartTokens": 418245,
+          "recallTokens": 56375,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 77.9
+        },
+        {
+          "caseId": "posthog-10",
+          "label": null,
+          "difficulty": null,
+          "baselineTokens": 346716,
+          "chartTokens": 340431,
+          "recallTokens": 56133,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 83.8
+        },
+        {
+          "caseId": "posthog-11",
+          "label": null,
+          "difficulty": null,
+          "baselineTokens": 180028,
+          "chartTokens": 281993,
+          "recallTokens": 83858,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": false,
+          "savingsPct": 53.4
+        },
+        {
+          "caseId": "posthog-12",
+          "label": null,
+          "difficulty": null,
+          "baselineTokens": 491025,
+          "chartTokens": 567064,
+          "recallTokens": 56339,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 88.5
+        }
+      ],
+      "armMeans": {
+        "baseline": 347466,
+        "chart": 477659,
+        "recall": 70080
+      },
+      "savingsPct": 79.8,
+      "correctnessRates": {
+        "baseline": 1,
+        "chart": 1,
+        "recall": 1
+      },
+      "hitRate": 1,
+      "hitRateAnyRank": 1,
+      "hitRateTopRank": 0.75,
+      "breakEvenRecalls": 1.72
+    },
+    {
+      "slug": "twenty",
+      "commit": "fe8ec0463abd626c017bd4bd1cd0de21c68cf2ab",
+      "cases": [
+        {
+          "caseId": "twenty-01",
+          "label": "metadata-schema",
+          "difficulty": "hard",
+          "baselineTokens": 365363,
+          "chartTokens": 565418,
+          "recallTokens": 66614,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 81.8
+        },
+        {
+          "caseId": "twenty-02",
+          "label": "workspace-migration",
+          "difficulty": "hard",
+          "baselineTokens": 263910,
+          "chartTokens": 305830,
+          "recallTokens": 44680,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 83.1
+        },
+        {
+          "caseId": "twenty-03",
+          "label": "generated-graphql",
+          "difficulty": "hard",
+          "baselineTokens": 442078,
+          "chartTokens": 273490,
+          "recallTokens": 44639,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 89.9
+        },
+        {
+          "caseId": "twenty-04",
+          "label": "graphql-query-runner",
+          "difficulty": "hard",
+          "baselineTokens": 309692,
+          "chartTokens": 287538,
+          "recallTokens": 66458,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 78.5
+        },
+        {
+          "caseId": "twenty-05",
+          "label": "auth",
+          "difficulty": "hard",
+          "baselineTokens": 295666,
+          "chartTokens": 294455,
+          "recallTokens": 44757,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 84.9
+        },
+        {
+          "caseId": "twenty-06",
+          "label": "auth-sso",
+          "difficulty": "hard",
+          "baselineTokens": 158525,
+          "chartTokens": 243096,
+          "recallTokens": 44314,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 72
+        },
+        {
+          "caseId": "twenty-07",
+          "label": "billing",
+          "difficulty": "hard",
+          "baselineTokens": 174904,
+          "chartTokens": 230707,
+          "recallTokens": 44795,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 74.4
+        },
+        {
+          "caseId": "twenty-08",
+          "label": "record-ui",
+          "difficulty": "hard",
+          "baselineTokens": 324840,
+          "chartTokens": 210834,
+          "recallTokens": 44692,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 86.2
+        },
+        {
+          "caseId": "twenty-09",
+          "label": "workflow",
+          "difficulty": "hard",
+          "baselineTokens": 547350,
+          "chartTokens": 330379,
+          "recallTokens": 44488,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": false,
+          "savingsPct": 91.9
+        },
+        {
+          "caseId": "twenty-10",
+          "label": "messaging-sync",
+          "difficulty": "hard",
+          "baselineTokens": 200194,
+          "chartTokens": 450216,
+          "recallTokens": 70416,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 64.8
+        },
+        {
+          "caseId": "twenty-11",
+          "label": "calendar-sync",
+          "difficulty": "hard",
+          "baselineTokens": 119478,
+          "chartTokens": 238923,
+          "recallTokens": 44622,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 62.7
+        },
+        {
+          "caseId": "twenty-12",
+          "label": "search",
+          "difficulty": "medium",
+          "baselineTokens": 167397,
+          "chartTokens": 251171,
+          "recallTokens": 44744,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 73.3
+        }
+      ],
+      "armMeans": {
+        "baseline": 280783,
+        "chart": 306838,
+        "recall": 50435
+      },
+      "savingsPct": 82,
+      "correctnessRates": {
+        "baseline": 1,
+        "chart": 1,
+        "recall": 1
+      },
+      "hitRate": 1,
+      "hitRateAnyRank": 1,
+      "hitRateTopRank": 0.9166666666666666,
+      "breakEvenRecalls": 1.33
+    },
+    {
+      "slug": "documenso",
+      "commit": "50f272be876f14a2e22518552f5030c3117c3391",
+      "cases": [
+        {
+          "caseId": "documenso-01",
+          "label": "signing",
+          "difficulty": "hard",
+          "baselineTokens": 265022,
+          "chartTokens": 283264,
+          "recallTokens": 68663,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 74.1
+        },
+        {
+          "caseId": "documenso-02",
+          "label": "sealing",
+          "difficulty": "hard",
+          "baselineTokens": 220181,
+          "chartTokens": 214451,
+          "recallTokens": 46158,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 79
+        },
+        {
+          "caseId": "documenso-03",
+          "label": "envelopes",
+          "difficulty": "hard",
+          "baselineTokens": 198008,
+          "chartTokens": 232788,
+          "recallTokens": 45958,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 76.8
+        },
+        {
+          "caseId": "documenso-04",
+          "label": "signing",
+          "difficulty": "hard",
+          "baselineTokens": 266190,
+          "chartTokens": 371793,
+          "recallTokens": 45953,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 82.7
+        },
+        {
+          "caseId": "documenso-05",
+          "label": "ai",
+          "difficulty": "hard",
+          "baselineTokens": 328682,
+          "chartTokens": 227668,
+          "recallTokens": 45898,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 86
+        },
+        {
+          "caseId": "documenso-06",
+          "label": "email",
+          "difficulty": "hard",
+          "baselineTokens": 203989,
+          "chartTokens": 227928,
+          "recallTokens": 45785,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 77.6
+        },
+        {
+          "caseId": "documenso-07",
+          "label": "webhooks",
+          "difficulty": "hard",
+          "baselineTokens": 203473,
+          "chartTokens": 234033,
+          "recallTokens": 45997,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 77.4
+        },
+        {
+          "caseId": "documenso-08",
+          "label": "organisations",
+          "difficulty": "hard",
+          "baselineTokens": 120644,
+          "chartTokens": 215777,
+          "recallTokens": 45822,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 62
+        },
+        {
+          "caseId": "documenso-09",
+          "label": "teams",
+          "difficulty": "medium",
+          "baselineTokens": 208889,
+          "chartTokens": 168817,
+          "recallTokens": 45936,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 78
+        },
+        {
+          "caseId": "documenso-10",
+          "label": "billing",
+          "difficulty": "medium",
+          "baselineTokens": 88911,
+          "chartTokens": 126051,
+          "recallTokens": 45626,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 48.7
+        },
+        {
+          "caseId": "documenso-11",
+          "label": "auth",
+          "difficulty": "medium",
+          "baselineTokens": 92169,
+          "chartTokens": 161729,
+          "recallTokens": 46053,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 50
+        },
+        {
+          "caseId": "documenso-12",
+          "label": "expiration",
+          "difficulty": "medium",
+          "baselineTokens": 99668,
+          "chartTokens": 180810,
+          "recallTokens": 45906,
+          "baselineCorrect": true,
+          "chartCorrect": true,
+          "recallCorrect": true,
+          "chartHit": true,
+          "chartHitTopRank": true,
+          "savingsPct": 53.9
+        }
+      ],
+      "armMeans": {
+        "baseline": 191319,
+        "chart": 220426,
+        "recall": 47813
+      },
+      "savingsPct": 75,
+      "correctnessRates": {
+        "baseline": 1,
+        "chart": 1,
+        "recall": 1
+      },
+      "hitRate": 1,
+      "hitRateAnyRank": 1,
+      "hitRateTopRank": 1,
+      "breakEvenRecalls": 1.54
+    }
+  ],
+  "crossRepo": {
+    "totalRuns": 180,
+    "repoCount": 5,
+    "casesPerRepo": 12,
+    "unweightedMeanSavingsPct": 76.7,
+    "weightedMeanSavingsPct": 77.5,
+    "overallCorrectness": {
+      "baseline": 1,
+      "chart": 1,
+      "recall": 1
+    },
+    "overallHitRate": 1,
+    "overallHitRateAnyRank": 1,
+    "overallHitRateTopRank": 0.9333333333333333,
+    "meanBreakEvenRecalls": 1.56
+  }
+};
+
+const fmtInt = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+const fmtPct = (value) => (value * 100).toFixed(1) + "%";
+const tokenLabel = (value) => fmtInt.format(value);
+const byId = (id) => document.getElementById(id);
+const el = (tag, className, text) => {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+};
+
+const totalCases = SUMMARY.crossRepo.repoCount * SUMMARY.crossRepo.casesPerRepo;
+const totalCorrect = Object.values(SUMMARY.crossRepo.overallCorrectness).reduce(
+  (sum, rate) => sum + rate * totalCases,
+  0
+);
+const hitCount = Math.round(SUMMARY.crossRepo.overallHitRateAnyRank * totalCases);
+const topRankHitCount = Math.round(SUMMARY.crossRepo.overallHitRateTopRank * totalCases);
+const stats = [
+  [SUMMARY.crossRepo.totalRuns + " runs", "completed evaluations"],
+  [(totalCorrect / SUMMARY.crossRepo.totalRuns * 100).toFixed(0) + "% correct", totalCorrect + "/" + SUMMARY.crossRepo.totalRuns],
+  [fmtPct(SUMMARY.crossRepo.overallHitRateAnyRank) + " chart surfaced", hitCount + "/" + totalCases],
+  [SUMMARY.crossRepo.unweightedMeanSavingsPct.toFixed(1) + "% avg savings", "unweighted"],
+  [SUMMARY.crossRepo.weightedMeanSavingsPct.toFixed(1) + "% pooled", "weighted by tokens"],
+  ["≈ " + SUMMARY.crossRepo.meanBreakEvenRecalls.toFixed(2) + " recalls", "break-even"],
+];
+
+const statsNode = byId("stats");
+for (const [value, label] of stats) {
+  const item = el("div", "stat");
+  item.append(el("strong", "", value), el("span", "", label));
+  statsNode.append(item);
+}
+byId("hit-diagnostic").textContent =
+  "precision@1: " +
+  fmtPct(SUMMARY.crossRepo.overallHitRateTopRank) +
+  " (" +
+  topRankHitCount +
+  "/" +
+  totalCases +
+  ") — correct chart ranked #1";
+
+const heroMax = Math.max(...SUMMARY.repos.map((repo) => repo.armMeans.baseline));
+const heroBars = el("div", "hero-bars");
+for (const repo of SUMMARY.repos) {
+  const group = el("div", "repo-group");
+  group.append(el("div", "savings", repo.savingsPct.toFixed(1) + "% saved"));
+  const bars = el("div", "bars");
+  for (const condition of ["baseline", "recall"]) {
+    const value = repo.armMeans[condition];
+    const wrap = el("div", "bar-wrap");
+    wrap.append(el("div", "value", tokenLabel(value)));
+    const bar = el("div", "bar " + condition);
+    bar.style.height = (value / heroMax * 100).toFixed(2) + "%";
+    wrap.append(bar);
+    bars.append(wrap);
+  }
+  group.append(bars, el("div", "repo-name", repo.slug));
+  heroBars.append(group);
+}
+byId("hero").append(heroBars);
+byId("axis-note").textContent = "Zero-based token axis, 0 to " + tokenLabel(heroMax) + " tokens.";
+
+const panels = byId("panels");
+for (const repo of SUMMARY.repos) {
+  const panel = el("article", "panel");
+  const head = el("div", "panel-head");
+  head.append(
+    el("h3", "", repo.slug),
+    el("div", "panel-meta", repo.savingsPct.toFixed(1) + "% saved · " + fmtPct(repo.hitRate) + " hits")
+  );
+  panel.append(head);
+  const scroll = el("div", "scroll");
+  const chart = el("div", "case-chart");
+  const max = Math.max(...repo.cases.map((testCase) => testCase.baselineTokens));
+  const cases = [...repo.cases].sort((a, b) => b.baselineTokens - a.baselineTokens);
+  for (const testCase of cases) {
+    const row = el("div", "case-row");
+    row.append(el("div", "case-label", testCase.label ?? testCase.caseId));
+    const bars = el("div", "case-bars");
+    const baseline = el("div", "hbar baseline");
+    baseline.style.width = (testCase.baselineTokens / max * 100).toFixed(2) + "%";
+    const recall = el("div", "hbar recall");
+    recall.style.width = (testCase.recallTokens / max * 100).toFixed(2) + "%";
+    bars.append(baseline, recall);
+    row.append(bars, el("div", "case-values", tokenLabel(testCase.baselineTokens) + " / " + tokenLabel(testCase.recallTokens)));
+    chart.append(row);
+  }
+  scroll.append(chart);
+  panel.append(scroll);
+  panels.append(panel);
+}
+
+byId("generated").textContent = "Generated " + new Date(SUMMARY.generatedAt).toLocaleString() + " from embedded summary data.";
+</script>
+</body>
+</html>

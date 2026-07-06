@@ -1,0 +1,1 @@
+Connected Stripe integration webhooks are dispatched from `apps/web/app/(ee)/api/stripe/integration/webhook/route.ts`. The attribution logic lives in `customer-created.ts`, `customer-updated.ts`, `customer-subscription-created.ts`, `checkout-session-completed.ts`, `invoice-paid.ts`, plus shared helpers `utils/create-new-customer.ts` and `utils/attribute-via-promotion-code-id.ts`.

@@ -1,0 +1,3 @@
+For customer purchases, [server/polar/order/service.py](/Users/knrz/Git/CyrusNuevoDia/capn-hook/eval/runs/work/polar-baseline/server/polar/order/service.py:625) enqueues `benefit.enqueue_benefits_grants`.
+
+The orchestration itself is in [server/polar/benefit/grant/service.py](/Users/knrz/Git/CyrusNuevoDia/capn-hook/eval/runs/work/polar-baseline/server/polar/benefit/grant/service.py:381), which de-dupes existing grants, computes grant/revoke benefit IDs, and chains revoke-then-grant work; [server/polar/benefit/tasks.py](/Users/knrz/Git/CyrusNuevoDia/capn-hook/eval/runs/work/polar-baseline/server/polar/benefit/tasks.py:69) defines the Dramatiq actors, including dispatching one `benefit.grant` job per benefit.

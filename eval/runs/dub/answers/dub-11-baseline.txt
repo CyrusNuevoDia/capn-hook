@@ -1,0 +1,3 @@
+Due partner commissions are aggregated in `apps/web/app/(ee)/api/cron/payouts/aggregate-due-commissions/route.ts`, which groups pending commissions by partner/program, creates or updates `payout` rows, and marks commissions `processed`.
+
+The processing charge is computed and charged in `apps/web/app/(ee)/api/cron/payouts/process/process-payouts.ts`; it calculates the payout fee, updates the invoice totals, and creates the Stripe PaymentIntent.

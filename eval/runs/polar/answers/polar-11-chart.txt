@@ -1,0 +1,3 @@
+Seller payout eligibility is checked in `server/polar/models/organization.py` and enforced in `server/polar/payout/service.py`; Stripe/manual payout account readiness/state lives in `server/polar/models/payout_account.py` and `server/polar/payout_account/service.py`.
+
+Payout creation, transfer, Stripe payout triggering, held/cancel flows, and reversal orchestration are in `server/polar/payout/service.py` plus `server/polar/payout/tasks.py`; the actual payout and `payout_reversal` transaction rows are created in `server/polar/transaction/service/payout.py`.

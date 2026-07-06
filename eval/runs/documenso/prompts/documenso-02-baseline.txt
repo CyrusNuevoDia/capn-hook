@@ -1,0 +1,1 @@
+Task: Where is a completed document sealed into its final PDF, including certificate/audit-log pages, PDF signing, and completion webhooks? Answer in one or two sentences naming the specific file(s).

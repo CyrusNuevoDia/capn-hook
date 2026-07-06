@@ -1,0 +1,1 @@
+Task: Where are JWT-authenticated requests converted into a workspace auth context for downstream resolvers? Answer in one or two sentences naming the specific file(s).

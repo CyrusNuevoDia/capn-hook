@@ -1,0 +1,1 @@
+Task: How does a click from the redirect path get deduplicated and recorded to analytics? Answer in one or two sentences naming the specific file(s).

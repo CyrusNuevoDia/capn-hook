@@ -1,0 +1,1 @@
+After `POST /api/links` parses the body in `apps/web/app/api/links/route.ts`, validation/normalization happens in `apps/web/lib/api/links/process-link.ts`. Persistence happens in `apps/web/lib/api/links/create-link.ts` via `prisma.link.create`, with cache/Tinybird/webhook side effects afterward.

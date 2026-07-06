@@ -1,0 +1,3 @@
+Expired recipients are detected by the cron job in `packages/lib/jobs/definitions/internal/expire-recipients-sweep.ts` and queried/enqueued in `packages/lib/jobs/definitions/internal/expire-recipients-sweep.handler.ts`.
+
+Processing happens in `packages/lib/jobs/definitions/internal/process-recipient-expired.handler.ts`: it claims the recipient, writes the audit log, emits `RECIPIENT_EXPIRED` via `triggerWebhook`, and enqueues owner notification through `send.owner.recipient.expired.email`, whose email send is handled in `packages/lib/jobs/definitions/emails/send-owner-recipient-expired-email.handler.ts`.

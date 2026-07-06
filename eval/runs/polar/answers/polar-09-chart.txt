@@ -1,0 +1,3 @@
+Product price shapes are validated on creation/update in [server/polar/product/service.py](/Users/knrz/Git/CyrusNuevoDia/capn-hook/eval/runs/work/polar-capn/server/polar/product/service.py:541), mainly `get_validated_prices`.
+
+Checkout-side currency selection and price handling live in [server/polar/product/price_set.py](/Users/knrz/Git/CyrusNuevoDia/capn-hook/eval/runs/work/polar-capn/server/polar/product/price_set.py:27) via `PriceSet` / `calculate_upfront_amount`, and are applied in [server/polar/checkout/service.py](/Users/knrz/Git/CyrusNuevoDia/capn-hook/eval/runs/work/polar-capn/server/polar/checkout/service.py:390) for currency, custom amount, seat pricing, and upfront amount.

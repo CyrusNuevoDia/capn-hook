@@ -1,0 +1,1 @@
+The flow is backed by `frontend/src/scenes/surveys/wizard/surveyWizardLogic.ts` and `products/surveys/backend/api/survey.py` for wizard save/launch persistence plus internal survey feature flag creation. Response-based stopping and throttling are handled by `posthog/tasks/stop_surveys_reached_target.py` and `posthog/tasks/update_survey_adaptive_sampling.py`.

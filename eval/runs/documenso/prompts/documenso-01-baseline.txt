@@ -1,0 +1,1 @@
+Task: Where is recipient document completion validated, including signing order, recipient access authentication, auto-inserted date fields, audit logs, and follow-up jobs/webhooks? Answer in one or two sentences naming the specific file(s).

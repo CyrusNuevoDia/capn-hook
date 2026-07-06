@@ -1,0 +1,1 @@
+Task: Where is a team email address verified and later updated as the sending identity? Answer in one or two sentences naming the specific file(s).

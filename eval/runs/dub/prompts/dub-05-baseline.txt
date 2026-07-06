@@ -1,0 +1,1 @@
+Task: Where does workspace API authentication apply Bearer API keys, session fallback, token scopes, and plan-aware rate limits? Answer in one or two sentences naming the specific file(s).

@@ -1,0 +1,16 @@
+{
+  "capnCommit": "4409f7c9558a8801e37579838248717ab382cee7",
+  "capnVersion": "0.2.0",
+  "codexVersion": "codex-cli 0.142.5",
+  "commit": "97e9430901a4197876318672cdd4fae99fc49a2b",
+  "concurrency": 1,
+  "embeddingMode": true,
+  "endedAt": "2026-07-05T22:54:55.697Z",
+  "harnessGitRev": "4409f7c9558a8801e37579838248717ab382cee7",
+  "model": "gpt-5.5",
+  "phase": "all",
+  "reasoningEffort": "low",
+  "repo": "polar",
+  "startedAt": "2026-07-05T22:33:04.828Z",
+  "backfilled": true
+}

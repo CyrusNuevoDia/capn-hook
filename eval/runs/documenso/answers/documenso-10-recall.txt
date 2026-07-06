@@ -1,0 +1,1 @@
+A paid subscription checkout is started from `packages/trpc/server/enterprise-router/create-subscription.ts`, which calls `createCheckoutSession` for an existing organisation. It’s also started during paid organisation creation in `packages/trpc/server/organisation-router/create-organisation.ts`; both route through `packages/ee/server-only/stripe/create-checkout-session.ts`.

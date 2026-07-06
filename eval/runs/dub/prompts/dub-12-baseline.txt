@@ -1,0 +1,1 @@
+Task: Where do connected Stripe integration webhooks turn customer, checkout, and invoice events into Dub lead and sale attribution? Answer in one or two sentences naming the specific file(s).

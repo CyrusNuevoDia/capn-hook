@@ -1,0 +1,1 @@
+Task: When a user adds a custom field to an object, where is that handled across the settings form UI, the frontend metadata mutation hook, the server field-metadata resolver, and the flat-field conversion that can expand a relation field into multiple metadata entries? Answer in one or two sentences naming the specific file(s).

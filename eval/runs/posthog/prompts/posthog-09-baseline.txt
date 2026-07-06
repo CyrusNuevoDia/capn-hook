@@ -1,0 +1,1 @@
+Task: Which files determine how the feature flag editor switches between boolean, multivariate, and remote config modes, how variant payloads are persisted and validated, and how the test-evaluation endpoint returns the evaluated variant or payload? Answer in one or two sentences naming the specific file(s).

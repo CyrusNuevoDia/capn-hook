@@ -1,0 +1,1 @@
+Task: Where is benefit granting and revocation orchestrated for a customer purchase, including de-duplicating existing grants and dispatching per-benefit jobs? Answer in one or two sentences naming the specific file(s).

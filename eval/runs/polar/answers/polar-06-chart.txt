@@ -1,0 +1,1 @@
+Benefit purchase orchestration is in `server/polar/benefit/grant/service.py`, specifically `BenefitGrantService.enqueue_benefits_grants`, which computes grant/revoke sets and de-duplicates already granted benefits. The per-benefit jobs are dispatched by `server/polar/benefit/tasks.py`, with one-time non-seat purchases entering via `server/polar/order/service.py`.

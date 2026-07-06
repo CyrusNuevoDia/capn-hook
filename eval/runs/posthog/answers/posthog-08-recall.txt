@@ -1,0 +1,3 @@
+The frontend consumer is `frontend/src/scenes/insights/views/CalendarHeatMap/calendarHeatMapLogic.tsx`, which reads `result.calendar_heatmap_data`.
+
+The backend path is `posthog/hogql_queries/query_runner.py` dispatching calendar heatmap Trends queries to `posthog/hogql_queries/insights/trends/calendar_heatmap_trends_query_runner.py`, which converts to `CalendarHeatmapQuery`, then `posthog/hogql_queries/insights/trends/calendar_heatmap_query_runner.py` builds the ClickHouse aggregation.

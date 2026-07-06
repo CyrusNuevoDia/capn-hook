@@ -1,0 +1,1 @@
+Task: When a Trends insight is displayed as a calendar heatmap, which files show the frontend component consuming calendar_heatmap_data and the backend detour that converts the TrendsQuery into a CalendarHeatmapQuery before building the ClickHouse aggregation? Answer in one or two sentences naming the specific file(s).

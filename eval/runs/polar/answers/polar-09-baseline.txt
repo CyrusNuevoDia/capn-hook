@@ -1,0 +1,3 @@
+Product price shapes are validated on creation in `server/polar/product/schemas.py` for the discriminated price schemas and per-shape validators, then in `server/polar/product/service.py` via `ProductService.get_validated_prices()` for cross-price composition rules; checkout ad-hoc prices reuse that same validator from `server/polar/checkout/service.py`.
+
+Checkout selection is handled in `server/polar/checkout/service.py`, using `server/polar/product/price_set.py` to choose prices by currency, pick custom/seat/static prices, validate custom amounts and seat limits, and calculate the upfront amount.

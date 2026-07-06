@@ -1,0 +1,1 @@
+Task: Where are incoming Stripe webhook requests signature-verified, stored as external events, and dispatched to typed background actors? Answer in one or two sentences naming the specific file(s).

@@ -1,0 +1,3 @@
+The per-workspace schema is assembled in `packages/twenty-server/src/engine/api/graphql/workspace-schema-builder/workspace-graphql-schema.factory.ts`, via `WorkspaceGraphQLSchemaGenerator`, with the metadata-to-types orchestration in `graphql-type-generators/gql-type.generator.ts`.
+
+Query roots are built through `graphql-type-generators/root-types/root-type.generator.ts` and `query-type.generator.ts`; object/input types come from `graphql-type-generators/object-types/object-metadata-gql-object-type.generator.ts` and `graphql-type-generators/input-types/object-metadata-gql-input-type.generator.ts`.

@@ -1,0 +1,3 @@
+The key files are `rust/kafka-deduplicator/src/pipelines/timestamp_deduplicator.rs` for the timestamp-key RocksDB duplicate decision, `rust/kafka-deduplicator/src/pipelines/ingestion_events/processor.rs` plus `duplicate_event.rs` for filtering non-duplicates and publishing duplicate-detection records, and `posthog/models/duplicate_events/sql.py` for mapping the Kafka duplicate records into the ClickHouse `duplicate_events` table via the Kafka table/materialized view.
+
+`rust/kafka-deduplicator/src/pipelines/ingestion_events/mod.rs` is the short orientation file that states the ingestion-events dedup strategy: keyed by timestamp, event name, distinct ID, and token.

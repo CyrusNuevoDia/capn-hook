@@ -1,0 +1,1 @@
+Team email verification is handled in `apps/remix/app/routes/_unauthenticated+/team.verify.email.$token.tsx`, backed by `packages/lib/server-only/team/create-team-email-verification.ts`. The later sending-identity update flows through `packages/trpc/server/team-router/router.ts` into `packages/lib/server-only/team/update-team-email.ts`.

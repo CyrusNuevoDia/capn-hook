@@ -1,0 +1,3 @@
+The team email is verified in [apps/remix/app/routes/_unauthenticated+/team.verify.email.$token.tsx](/Users/knrz/Git/CyrusNuevoDia/capn-hook/eval/runs/work/documenso-baseline/apps/remix/app/routes/_unauthenticated+/team.verify.email.$token.tsx), where the token is checked and `TeamEmail` is created.
+
+The verified team email’s sending identity details are updated via [packages/lib/server-only/team/update-team-email.ts](/Users/knrz/Git/CyrusNuevoDia/capn-hook/eval/runs/work/documenso-baseline/packages/lib/server-only/team/update-team-email.ts), exposed through `team.email.update` in [packages/trpc/server/team-router/router.ts](/Users/knrz/Git/CyrusNuevoDia/capn-hook/eval/runs/work/documenso-baseline/packages/trpc/server/team-router/router.ts).

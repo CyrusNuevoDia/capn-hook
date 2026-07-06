@@ -1,0 +1,3 @@
+The subject is resolved in [server/polar/auth/middlewares.py](/Users/knrz/Git/CyrusNuevoDia/capn-hook/eval/runs/work/polar-baseline/server/polar/auth/middlewares.py), especially `get_auth_subject`, which maps bearer/session credentials to `AuthSubject(User | Organization | Customer | Member | Anonymous)`.
+
+Required subject types and scopes are enforced in [server/polar/auth/dependencies.py](/Users/knrz/Git/CyrusNuevoDia/capn-hook/eval/runs/work/polar-baseline/server/polar/auth/dependencies.py), via `Authenticator` / `_Authenticator.__call__`; individual endpoint modules declare those requirements in their local `auth.py` files.

@@ -1,0 +1,3 @@
+The files are `frontend/src/scenes/feature-flags/FeatureFlagForm.tsx`, `frontend/src/scenes/feature-flags/featureFlagLogic.ts`, and `products/feature_flags/backend/api/feature_flag.py`.
+
+`FeatureFlagForm.tsx` controls the boolean/multivariate/remote config UI modes, `featureFlagLogic.ts` handles form validation plus index-to-variant-key payload persistence, and `feature_flag.py` validates/stores payloads/variants and implements `test_evaluation` returning the evaluated variant in `result` plus `payload`.

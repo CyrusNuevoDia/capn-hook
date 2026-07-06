@@ -1,0 +1,1 @@
+Task: Which files define the session replay invariant that capture stamps token/session_id/distinct_id headers, the Node replay ingester rejects mismatches against the body, and accepted messages become aggregated session_replay_events rows? Answer in one or two sentences naming the specific file(s).

@@ -1,0 +1,1 @@
+Task: Where does AI field detection turn a draft envelope PDF into suggested fields assigned to recipients? Answer in one or two sentences naming the specific file(s).

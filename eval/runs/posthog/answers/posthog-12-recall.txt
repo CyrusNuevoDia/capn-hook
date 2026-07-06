@@ -1,0 +1,3 @@
+The relevant files are `frontend/src/scenes/billing/BillingLimit.tsx`, `frontend/src/scenes/billing/billingProductLogic.ts`, `frontend/src/scenes/billing/billingLogic.tsx`, `ee/api/billing.py`, `ee/billing/billing_manager.py`, and `ee/billing/quota_limiting.py`.
+
+For warehouse sync enforcement, use `products/warehouse_sources/backend/temporal/data_imports/external_data_job.py`, `products/warehouse_sources/backend/temporal/data_imports/workflow_activities/check_billing_limits.py`, `products/warehouse_sources/backend/temporal/data_imports/pipelines/common/extract.py`, and `products/warehouse_sources/backend/temporal/data_imports/row_tracking.py`.

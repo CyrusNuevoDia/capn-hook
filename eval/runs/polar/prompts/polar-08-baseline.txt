@@ -1,0 +1,1 @@
+Task: Where does the API decide whether a request's subject is a user, organization, customer, member, or anonymous, and enforce the required scopes? Answer in one or two sentences naming the specific file(s).

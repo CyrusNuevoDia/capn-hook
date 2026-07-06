@@ -1,0 +1,1 @@
+Task: Where is a signer’s field value saved, including per-field validation, field-auth checks, signature storage, and audit logs? Answer in one or two sentences naming the specific file(s).

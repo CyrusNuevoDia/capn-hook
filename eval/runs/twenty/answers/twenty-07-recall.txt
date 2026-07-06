@@ -1,0 +1,3 @@
+Switching a billing plan is handled in `packages/twenty-front/src/modules/settings/billing/hooks/useSwitchBillingPlan.ts` and its mutation file `packages/twenty-front/src/modules/settings/billing/graphql/mutations/switchSubscriptionToEnterprisePlan.ts`, then through `packages/twenty-server/src/engine/core-modules/billing/billing.resolver.ts` into `packages/twenty-server/src/engine/core-modules/billing/services/billing-subscription-update.service.ts`.
+
+The Stripe checkout path also runs through `packages/twenty-server/src/engine/core-modules/billing/services/billing-portal.workspace-service.ts` and `packages/twenty-server/src/engine/core-modules/billing/stripe/services/stripe-checkout.service.ts`.

@@ -1,0 +1,3 @@
+Incoming Stripe webhooks are handled in [server/polar/integrations/stripe/endpoints.py](/Users/knrz/Git/CyrusNuevoDia/capn-hook/eval/runs/work/polar-capn/server/polar/integrations/stripe/endpoints.py:61): `WebhookEventGetter` verifies signatures with `stripe.Webhook.construct_event`, then `webhook`/`webhook_connect` call `enqueue`.
+
+The external event storage and job enqueue happen in [server/polar/external_event/service.py](/Users/knrz/Git/CyrusNuevoDia/capn-hook/eval/runs/work/polar-capn/server/polar/external_event/service.py:27), and the typed Dramatiq actors are in [server/polar/integrations/stripe/tasks.py](/Users/knrz/Git/CyrusNuevoDia/capn-hook/eval/runs/work/polar-capn/server/polar/integrations/stripe/tasks.py:55).

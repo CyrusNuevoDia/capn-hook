@@ -1,0 +1,1 @@
+Task: Where does the record picker run its search, from the single-record-picker search hook through the shared object-record search hook into the backend search resolver and service? Answer in one or two sentences naming the specific file(s).

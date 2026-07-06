@@ -1,0 +1,3 @@
+The frontend consumption is in `frontend/src/scenes/insights/views/CalendarHeatMap/calendarHeatMapLogic.tsx`, used by `TrendsCalendarHeatMap.tsx`.
+
+The backend detour starts in `posthog/hogql_queries/query_runner.py`, which routes calendar-heatmap `TrendsQuery` to `posthog/hogql_queries/insights/trends/calendar_heatmap_trends_query_runner.py`; that file converts it into a `CalendarHeatmapQuery`, then delegates to `posthog/hogql_queries/insights/trends/calendar_heatmap_query_runner.py` to build the ClickHouse/HogQL aggregation.

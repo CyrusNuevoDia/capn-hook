@@ -1,0 +1,3 @@
+The relevant files are [FeatureFlagForm.tsx](/Users/knrz/Git/CyrusNuevoDia/capn-hook/eval/runs/work/posthog-capn/frontend/src/scenes/feature-flags/FeatureFlagForm.tsx), [featureFlagLogic.ts](/Users/knrz/Git/CyrusNuevoDia/capn-hook/eval/runs/work/posthog-capn/frontend/src/scenes/feature-flags/featureFlagLogic.ts), and [feature_flag.py](/Users/knrz/Git/CyrusNuevoDia/capn-hook/eval/runs/work/posthog-capn/products/feature_flags/backend/api/feature_flag.py).
+
+`FeatureFlagForm.tsx` controls the boolean/multivariate/remote config editor UI, `featureFlagLogic.ts` maps and validates variant payload form state, and `feature_flag.py` persists/validates payloads and returns evaluated variants or payload metadata from the test-evaluation endpoint.

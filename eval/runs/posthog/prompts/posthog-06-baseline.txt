@@ -1,0 +1,1 @@
+Task: For a normal TrendsQuery that is not a calendar heatmap, box plot, or slope graph, which files identify the backend runner selected for it and show how the runner turns each series into HogQL AST queries that are UNIONed and sent toward ClickHouse? Answer in one or two sentences naming the specific file(s).

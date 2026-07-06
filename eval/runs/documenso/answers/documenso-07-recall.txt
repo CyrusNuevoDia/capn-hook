@@ -1,0 +1,3 @@
+Documenso webhooks are triggered via `packages/lib/server-only/webhooks/trigger/trigger-webhook.ts` from the document/template/envelope/job files listed in the chart, executed in `packages/lib/jobs/definitions/internal/execute-webhook.handler.ts` through `packages/lib/server-only/webhooks/execute-webhook-call.ts`, and persisted as `Webhook` / `WebhookCall` in `packages/prisma/schema.prisma`.
+
+Manual resend is handled by `packages/trpc/server/webhook-router/resend-webhook-call.ts`, with the UI action in `apps/remix/app/components/general/webhook-logs-sheet.tsx`.

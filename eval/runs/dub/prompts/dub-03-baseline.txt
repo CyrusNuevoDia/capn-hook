@@ -1,0 +1,1 @@
+Task: Where are aggregate analytics API requests translated into Tinybird pipe calls? Answer in one or two sentences naming the specific file(s).

@@ -1,0 +1,3 @@
+The invariant is defined across `rust/capture/src/events/recordings.rs` and `rust/common/types/src/event.rs` for capture’s token/session_id/distinct_id Kafka headers, `nodejs/src/ingestion/pipelines/sessionreplay/validate-headers-step.ts` plus `nodejs/src/ingestion/pipelines/sessionreplay/parse-message-step.ts` for Node validation and header/body mismatch DLQs, and `nodejs/src/ingestion/pipelines/sessionreplay/record-session-event-step.ts` with `posthog/session_recordings/sql/session_replay_event_sql.py` for accepted replay messages flowing into aggregated `session_replay_events` rows.
+
+Tests pin the same behavior in `nodejs/src/ingestion/pipelines/sessionreplay/validate-headers-step.test.ts` and `nodejs/src/ingestion/pipelines/sessionreplay/parse-message-step.test.ts`.

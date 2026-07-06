@@ -1,0 +1,1 @@
+Task: Where are workspace API keys created and constrained by role-based scopes? Answer in one or two sentences naming the specific file(s).

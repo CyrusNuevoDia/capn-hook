@@ -1,0 +1,1 @@
+Task: Where does a Stripe charge become both a Payment row and a ledger payment transaction carrying settlement currency, tax metadata, and processor fees? Answer in one or two sentences naming the specific file(s).

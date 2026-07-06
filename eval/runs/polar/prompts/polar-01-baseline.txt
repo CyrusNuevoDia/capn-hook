@@ -1,0 +1,1 @@
+Task: When a checkout is confirmed, where are the required buyer fields validated, tax calculated, and the Stripe intent created or confirmed (including marking free checkouts for async success handling)? Answer in one or two sentences naming the specific file(s).

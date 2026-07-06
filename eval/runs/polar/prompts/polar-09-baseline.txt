@@ -1,0 +1,1 @@
+Task: Where are product price shapes validated at creation and later selected at checkout for currency, custom pricing, seat pricing, and upfront amount? Answer in one or two sentences naming the specific file(s).

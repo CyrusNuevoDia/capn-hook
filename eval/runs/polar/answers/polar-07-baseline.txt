@@ -1,0 +1,3 @@
+Outgoing webhook endpoints are selected and queued in `server/polar/webhook/service.py`, with raw/Discord/Slack serialization defined in `server/polar/webhook/webhooks.py`.
+
+Signing, HTTP delivery, retry/backoff, and FIFO gating happen in `server/polar/webhook/tasks.py`, using earlier-pending checks from `server/polar/webhook/repository.py`.

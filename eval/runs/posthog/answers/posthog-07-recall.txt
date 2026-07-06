@@ -1,0 +1,3 @@
+The files are `posthog/hogql_queries/insights/funnels/funnel_query_context.py`, `posthog/hogql_queries/insights/funnels/funnels_query_runner.py`, `posthog/hogql_queries/insights/funnels/funnel.py`, `posthog/hogql_queries/insights/funnels/base.py`, `posthog/hogql_queries/insights/funnels/funnel_event_query.py`, and `posthog/hogql_queries/query_runner.py`.
+
+In short: `query_runner.py` dispatches `FunnelsQuery`; `funnels_query_runner.py` creates/normalizes context and chooses `FunnelUDF` for steps mode; `funnel.py`, `base.py`, and `funnel_event_query.py` build the `aggregate_funnel` HogQL AST with breakdown/step event inputs; then `funnels_query_runner.py` executes it as HogQL against ClickHouse.

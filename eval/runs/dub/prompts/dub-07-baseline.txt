@@ -1,0 +1,1 @@
+Task: When a custom domain is added to a workspace, where is it registered with Vercel and where is its root-domain link created? Answer in one or two sentences naming the specific file(s).
