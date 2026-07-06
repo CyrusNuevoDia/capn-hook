@@ -25,13 +25,13 @@ const contextHook = { command: "/usr/bin/env capn context" };
 const splitContextHook = { command: "/usr/bin/env", args: ["capn", "context"] };
 
 const contextContract = `<capn-hook>
-This project keeps a chart of past discoveries: questions earlier sessions answered, and the files backing each answer.
+This project keeps a chart of past discoveries: questions earlier sessions answered, and the files in this repo backing each answer.
 
-Thinking about finding something? Ask the capn first:
+About to search the codebase — where something lives, how a flow works, which file owns a behavior? Ask the capn first:
 
     capn ask "where are payment webhooks handled?"
 
-A hit hands you the files that answer it, skipping the whole search. A miss costs seconds; re-exploring costs minutes.
+A hit hands you the files that answer it, skipping the whole search. A miss costs seconds; re-exploring costs minutes. Every answer is a set of files, so only ask what a file in this repo could answer — not live failures, external services, or anything you'd debug rather than locate.
 
 When you do discover a route the hard way (real exploration, more than a couple of tool calls), chart it for the next session as a small, answerable question:
 
