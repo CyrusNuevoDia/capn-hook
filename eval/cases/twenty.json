@@ -1,0 +1,162 @@
+{
+  "repo": "twenty",
+  "commit": "fe8ec0463abd626c017bd4bd1cd0de21c68cf2ab",
+  "cases": [
+    {
+      "id": "twenty-01",
+      "question": "When a user adds a custom field to an object, where is that handled across the settings form UI, the frontend metadata mutation hook, the server field-metadata resolver, and the flat-field conversion that can expand a relation field into multiple metadata entries?",
+      "groundTruthFiles": [
+        "packages/twenty-front/src/modules/settings/data-model/fields/forms/components/SettingsObjectNewFieldSelector.tsx",
+        "packages/twenty-front/src/modules/object-metadata/hooks/useCreateOneFieldMetadataItem.ts",
+        "packages/twenty-server/src/engine/metadata-modules/field-metadata/field-metadata.resolver.ts",
+        "packages/twenty-server/src/engine/metadata-modules/flat-field-metadata/utils/from-create-field-input-to-flat-field-metadatas-to-create.util.ts"
+      ],
+      "rationale": "The flow crosses a settings form, a frontend metadata mutation hook, the backend GraphQL resolver, and a flat-metadata utility that hides relation/morph expansion. A developer has to trace UI intent through generated metadata APIs into the server-side migration representation.",
+      "difficulty": "hard",
+      "subsystem": "metadata-schema"
+    },
+    {
+      "id": "twenty-02",
+      "question": "Where is a metadata change validated, converted into workspace migration actions, and run against a workspace schema?",
+      "groundTruthFiles": [
+        "packages/twenty-server/src/engine/workspace-manager/workspace-migration/services/workspace-migration-validate-build-and-run-service.ts",
+        "packages/twenty-server/src/engine/workspace-manager/workspace-migration/services/workspace-migration-build-orchestrator.service.ts",
+        "packages/twenty-server/src/engine/workspace-manager/workspace-migration/workspace-migration-builder/services/workspace-entity-migration-builder.service.ts",
+        "packages/twenty-server/src/engine/workspace-manager/workspace-migration/utils/compute-ordered-migration-actions.util.ts"
+      ],
+      "rationale": "Not visible from a single service name: validation/build/run orchestration, entity diff building, and action ordering live in separate workspace-migration layers.",
+      "difficulty": "hard",
+      "subsystem": "workspace-migration"
+    },
+    {
+      "id": "twenty-03",
+      "question": "Where is the per-workspace GraphQL schema assembled from object metadata into query roots and object/input types?",
+      "groundTruthFiles": [
+        "packages/twenty-server/src/engine/api/graphql/workspace-schema-builder/workspace-graphql-schema.factory.ts",
+        "packages/twenty-server/src/engine/api/graphql/workspace-schema-builder/graphql-type-generators/root-types/query-type.generator.ts",
+        "packages/twenty-server/src/engine/api/graphql/workspace-schema-builder/graphql-type-generators/object-types/object-metadata-gql-object-type.generator.ts",
+        "packages/twenty-server/src/engine/api/graphql/workspace-schema-builder/graphql-type-generators/input-types/create-input/object-metadata-create-gql-input-type.generator.ts"
+      ],
+      "rationale": "The answer requires following the schema factory into root type generation and then into per-object output/input type generators rather than stopping at the factory file.",
+      "difficulty": "hard",
+      "subsystem": "generated-graphql"
+    },
+    {
+      "id": "twenty-04",
+      "question": "Where are selected GraphQL fields parsed and turned into the database columns to select and return for dynamic record queries?",
+      "groundTruthFiles": [
+        "packages/twenty-server/src/engine/api/graphql/graphql-query-runner/graphql-query-parsers/graphql-query.parser.ts",
+        "packages/twenty-server/src/engine/api/graphql/graphql-query-runner/graphql-query-parsers/graphql-query-selected-fields/graphql-selected-fields.parser.ts",
+        "packages/twenty-server/src/engine/api/graphql/graphql-query-runner/utils/build-columns-to-select.ts",
+        "packages/twenty-server/src/engine/api/graphql/graphql-query-runner/utils/build-columns-to-return.ts"
+      ],
+      "rationale": "The query runner splits AST parsing, selected-field extraction, DB projection, and response shaping across utilities in different folders, so a cold agent must follow imports and data flow.",
+      "difficulty": "hard",
+      "subsystem": "graphql-query-runner"
+    },
+    {
+      "id": "twenty-05",
+      "question": "Where are JWT-authenticated requests converted into a workspace auth context for downstream resolvers?",
+      "groundTruthFiles": [
+        "packages/twenty-server/src/engine/core-modules/auth/strategies/jwt.auth.strategy.ts",
+        "packages/twenty-server/src/engine/core-modules/auth/middlewares/workspace-auth-context.middleware.ts",
+        "packages/twenty-server/src/engine/core-modules/auth/storage/workspace-auth-context.storage.ts",
+        "packages/twenty-server/src/engine/core-modules/auth/services/auth.service.ts"
+      ],
+      "rationale": "The request identity path crosses Passport strategy, middleware, async storage, and auth service lookups. No single auth file explains the complete context construction.",
+      "difficulty": "hard",
+      "subsystem": "auth"
+    },
+    {
+      "id": "twenty-06",
+      "question": "Where is the SSO sign-in flow handled across the frontend SSO hook, the auth SSO controller, the SSO auth service, and the persisted identity-provider service?",
+      "groundTruthFiles": [
+        "packages/twenty-front/src/modules/auth/sign-in-up/hooks/useSSO.ts",
+        "packages/twenty-server/src/engine/core-modules/auth/controllers/sso-auth.controller.ts",
+        "packages/twenty-server/src/engine/core-modules/auth/services/auth-sso.service.ts",
+        "packages/twenty-server/src/engine/core-modules/sso/services/sso.service.ts"
+      ],
+      "rationale": "A developer must connect the frontend authorization URL request/callback behavior to server controller and service logic, then into SSO provider metadata management.",
+      "difficulty": "hard",
+      "subsystem": "auth-sso"
+    },
+    {
+      "id": "twenty-07",
+      "question": "Where is switching a billing plan handled across the settings UI hook, the GraphQL billing resolver, the subscription service, and the Stripe checkout integration?",
+      "groundTruthFiles": [
+        "packages/twenty-front/src/modules/settings/billing/hooks/useSwitchBillingPlan.ts",
+        "packages/twenty-server/src/engine/core-modules/billing/billing.resolver.ts",
+        "packages/twenty-server/src/engine/core-modules/billing/services/billing-subscription.service.ts",
+        "packages/twenty-server/src/engine/core-modules/billing/stripe/services/stripe-checkout.service.ts"
+      ],
+      "rationale": "The flow crosses frontend plan action code, the server GraphQL boundary, domain subscription rules, and Stripe session creation. None of those files alone explains the plan switch.",
+      "difficulty": "hard",
+      "subsystem": "billing"
+    },
+    {
+      "id": "twenty-08",
+      "question": "Where is the record index table assembled from the current view metadata into query params, table wrappers, and per-cell field-context rendering?",
+      "groundTruthFiles": [
+        "packages/twenty-front/src/modules/object-record/record-index/components/RecordIndexTableContainer.tsx",
+        "packages/twenty-front/src/modules/object-record/record-index/hooks/useFindManyRecordIndexTableParams.ts",
+        "packages/twenty-front/src/modules/object-record/record-table/components/RecordTableWithWrappers.tsx",
+        "packages/twenty-front/src/modules/object-record/record-table/record-table-cell/components/RecordTableCellFieldContextWrapper.tsx"
+      ],
+      "rationale": "The record index page delegates query construction, table composition, and cell metadata context to separate frontend modules; it takes import-following to see how view metadata drives cell rendering.",
+      "difficulty": "hard",
+      "subsystem": "record-ui"
+    },
+    {
+      "id": "twenty-09",
+      "question": "Where is manually triggering a workflow version handled from command-menu payload construction through the GraphQL/REST trigger endpoints into a queued workflow run job?",
+      "groundTruthFiles": [
+        "packages/twenty-front/src/modules/command-menu-item/engine-command/utils/buildTriggerWorkflowVersionPayloads.ts",
+        "packages/twenty-server/src/engine/core-modules/workflow/resolvers/workflow-trigger.resolver.ts",
+        "packages/twenty-server/src/engine/core-modules/workflow/controllers/workflow-trigger.controller.ts",
+        "packages/twenty-server/src/modules/workflow/workflow-runner/jobs/run-workflow.job.ts"
+      ],
+      "rationale": "The trigger can enter through UI command payloads and server API surfaces before becoming a queued job, so this requires cross-layer tracing rather than reading a workflow resolver alone.",
+      "difficulty": "hard",
+      "subsystem": "workflow"
+    },
+    {
+      "id": "twenty-10",
+      "question": "Where is Gmail message import handled from the Gmail message-list fetch, through excluded-label filtering, into imported and saved messages?",
+      "groundTruthFiles": [
+        "packages/twenty-server/src/modules/messaging/message-import-manager/drivers/gmail/services/gmail-get-message-list.service.ts",
+        "packages/twenty-server/src/modules/messaging/message-import-manager/drivers/gmail/utils/compute-gmail-exclude-search-filter.util.ts",
+        "packages/twenty-server/src/modules/messaging/message-import-manager/services/messaging-messages-import.service.ts",
+        "packages/twenty-server/src/modules/messaging/message-import-manager/services/messaging-save-messages-and-enqueue-contact-creation.service.ts"
+      ],
+      "rationale": "Provider-specific query construction, import orchestration, and message persistence are in different parts of the messaging import manager, so this needs real import tracing.",
+      "difficulty": "hard",
+      "subsystem": "messaging-sync"
+    },
+    {
+      "id": "twenty-11",
+      "question": "Where are calendar-event visibility restrictions enforced before timeline calendar events are returned to the frontend for an object record?",
+      "groundTruthFiles": [
+        "packages/twenty-server/src/modules/calendar/common/query-hooks/calendar-event/services/apply-calendar-events-visibility-restrictions.service.ts",
+        "packages/twenty-server/src/engine/core-modules/calendar/timeline-calendar-event.service.ts",
+        "packages/twenty-server/src/engine/core-modules/calendar/timeline-calendar-event.resolver.ts",
+        "packages/twenty-front/src/modules/activities/calendar/graphql/queries/getTimelineCalendarEventsFromObjectRecord.ts"
+      ],
+      "rationale": "The access policy is implemented as a query-hook service in the calendar module but consumed through a timeline service and resolver in a different core module and a frontend query, so it requires cross-module discovery rather than reading one calendar file.",
+      "difficulty": "hard",
+      "subsystem": "calendar-sync"
+    },
+    {
+      "id": "twenty-12",
+      "question": "Where does the record picker run its search, from the single-record-picker search hook through the shared object-record search hook into the backend search resolver and service?",
+      "groundTruthFiles": [
+        "packages/twenty-front/src/modules/object-record/record-picker/single-record-picker/hooks/useSingleRecordPickerPerformSearch.ts",
+        "packages/twenty-front/src/modules/object-record/hooks/useObjectRecordSearchRecords.ts",
+        "packages/twenty-server/src/engine/core-modules/search/search.resolver.ts",
+        "packages/twenty-server/src/engine/core-modules/search/services/search.service.ts"
+      ],
+      "rationale": "The picker does not call the backend directly in an obvious way; the developer must follow frontend hook composition and then the backend search GraphQL path.",
+      "difficulty": "medium",
+      "subsystem": "search"
+    }
+  ]
+}

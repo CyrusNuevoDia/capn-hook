@@ -1,0 +1,155 @@
+{
+  "repo": "documenso",
+  "commit": "50f272be876f14a2e22518552f5030c3117c3391",
+  "cases": [
+    {
+      "id": "documenso-01",
+      "question": "Where is recipient document completion validated, including signing order, recipient access authentication, auto-inserted date fields, audit logs, and follow-up jobs/webhooks?",
+      "groundTruthFiles": [
+        "packages/lib/server-only/document/complete-document-with-token.ts",
+        "packages/trpc/server/recipient-router/router.ts",
+        "packages/lib/server-only/recipient/get-is-recipient-turn.ts",
+        "packages/lib/server-only/document/is-recipient-authorized.ts"
+      ],
+      "rationale": "The tRPC recipient mutation delegates completion to the server-only document function, which then checks turn order and recipient auth before mutating document state and scheduling side effects.",
+      "difficulty": "hard",
+      "subsystem": "signing"
+    },
+    {
+      "id": "documenso-02",
+      "question": "Where is a completed document sealed into its final PDF, including certificate/audit-log pages, PDF signing, and completion webhooks?",
+      "groundTruthFiles": [
+        "packages/lib/jobs/definitions/internal/seal-document.handler.ts",
+        "packages/lib/server-only/pdf/generate-certificate-pdf.ts",
+        "packages/lib/server-only/pdf/render-certificate.ts",
+        "packages/signing/index.ts"
+      ],
+      "rationale": "The seal job orchestrates completion checks, field insertion, certificate generation/rendering, final PDF signing, storage, and webhook/email follow-up.",
+      "difficulty": "hard",
+      "subsystem": "sealing"
+    },
+    {
+      "id": "documenso-03",
+      "question": "Where is a new envelope created from uploaded files, including conversion/normalization, placeholder extraction, field placement, and audit logging?",
+      "groundTruthFiles": [
+        "packages/trpc/server/envelope-router/create-envelope.ts",
+        "packages/lib/server-only/envelope/create-envelope.ts",
+        "packages/lib/server-only/envelope-item/create-envelope-items.ts",
+        "packages/lib/server-only/pdf/auto-place-fields.ts"
+      ],
+      "rationale": "The envelope route processes uploaded files, the core create service persists the envelope and recipients, the item helper stores PDFs and logs items, and auto-placement converts PDF placeholders into fields.",
+      "difficulty": "hard",
+      "subsystem": "envelopes"
+    },
+    {
+      "id": "documenso-04",
+      "question": "Where is a signer’s field value saved, including per-field validation, field-auth checks, signature storage, and audit logs?",
+      "groundTruthFiles": [
+        "packages/lib/server-only/field/sign-field-with-token.ts",
+        "packages/trpc/server/envelope-router/sign-envelope-field.ts",
+        "packages/trpc/server/envelope-router/sign-envelope-field.types.ts"
+      ],
+      "rationale": "Legacy token signing and the newer envelope field route both implement value validation, auth enforcement, signature upserts, and audit-log persistence, while the UI utility shapes signature inputs.",
+      "difficulty": "hard",
+      "subsystem": "signing"
+    },
+    {
+      "id": "documenso-05",
+      "question": "Where does AI field detection turn a draft envelope PDF into suggested fields assigned to recipients?",
+      "groundTruthFiles": [
+        "packages/lib/server-only/ai/envelope/detect-fields/index.ts",
+        "apps/remix/server/api/ai/detect-fields.ts",
+        "packages/lib/server-only/ai/envelope/detect-fields/schema.ts",
+        "packages/lib/server-only/ai/pdf-to-images.ts"
+      ],
+      "rationale": "The AI endpoint authorizes and streams progress, while the detector converts PDFs to images, masks existing fields, calls the model with a schema, normalizes boxes, and resolves recipients.",
+      "difficulty": "hard",
+      "subsystem": "ai"
+    },
+    {
+      "id": "documenso-06",
+      "question": "Where are signing invitation emails assembled and sent after a document is distributed?",
+      "groundTruthFiles": [
+        "packages/lib/jobs/definitions/emails/send-signing-email.handler.ts",
+        "packages/lib/server-only/document/send-document.ts",
+        "packages/email/templates/document-invite.tsx",
+        "packages/email/mailer.ts"
+      ],
+      "rationale": "Document distribution schedules signing-email jobs, and the job handler resolves branding/context, renders the document invite template, and sends through the configured mailer transport.",
+      "difficulty": "hard",
+      "subsystem": "email"
+    },
+    {
+      "id": "documenso-07",
+      "question": "Where are Documenso webhooks triggered, executed, persisted, and manually resent?",
+      "groundTruthFiles": [
+        "packages/lib/server-only/webhooks/trigger/trigger-webhook.ts",
+        "packages/lib/jobs/definitions/internal/execute-webhook.handler.ts",
+        "packages/lib/server-only/webhooks/execute-webhook-call.ts",
+        "packages/trpc/server/webhook-router/resend-webhook-call.ts"
+      ],
+      "rationale": "Webhook triggering fans out to jobs, the execute job performs the HTTP call and records WebhookCall rows, and the resend route requeues prior calls.",
+      "difficulty": "hard",
+      "subsystem": "webhooks"
+    },
+    {
+      "id": "documenso-08",
+      "question": "Where are organisation member invitations created, seat limits enforced, billing seat counts synced, and invite emails sent?",
+      "groundTruthFiles": [
+        "packages/lib/server-only/organisation/create-organisation-member-invites.ts",
+        "packages/trpc/server/organisation-router/create-organisation-member-invites.ts",
+        "packages/email/templates/organisation-invite.tsx"
+      ],
+      "rationale": "The organisation invite service handles permission checks, duplicate filtering, billing seat enforcement/sync, invite row creation, and rendering/sending the invite template.",
+      "difficulty": "hard",
+      "subsystem": "organisations"
+    },
+    {
+      "id": "documenso-09",
+      "question": "Where is a team email address verified and later updated as the sending identity?",
+      "groundTruthFiles": [
+        "packages/lib/server-only/team/create-team-email-verification.ts",
+        "packages/lib/server-only/team/update-team-email.ts",
+        "packages/email/templates/confirm-team-email.tsx"
+      ],
+      "rationale": "Team email verification token creation sends the confirmation email, and the update helper applies the verified email state used as a team sending identity.",
+      "difficulty": "medium",
+      "subsystem": "teams"
+    },
+    {
+      "id": "documenso-10",
+      "question": "Where is a paid subscription checkout started from the API layer?",
+      "groundTruthFiles": [
+        "packages/ee/server-only/stripe/create-checkout-session.ts",
+        "packages/trpc/server/enterprise-router/create-subscription.ts"
+      ],
+      "rationale": "The enterprise tRPC route gathers the request context and delegates Stripe checkout creation to the server-only Stripe helper.",
+      "difficulty": "medium",
+      "subsystem": "billing"
+    },
+    {
+      "id": "documenso-11",
+      "question": "Where is two-factor authentication setup and verification implemented for account security?",
+      "groundTruthFiles": [
+        "packages/auth/server/routes/two-factor.ts",
+        "packages/lib/server-only/2fa/setup-2fa.ts",
+        "packages/lib/server-only/2fa/verify-2fa-token.ts"
+      ],
+      "rationale": "The Hono two-factor route exposes setup/enable/disable flows and delegates secret creation and token verification to server-only 2FA helpers.",
+      "difficulty": "medium",
+      "subsystem": "auth"
+    },
+    {
+      "id": "documenso-12",
+      "question": "Where are expired recipients detected and processed, including owner notification and webhook emission?",
+      "groundTruthFiles": [
+        "packages/lib/jobs/definitions/internal/process-recipient-expired.handler.ts",
+        "packages/lib/jobs/definitions/internal/expire-recipients-sweep.handler.ts",
+        "packages/lib/jobs/definitions/emails/send-owner-recipient-expired-email.handler.ts"
+      ],
+      "rationale": "The sweep finds recipients whose expiration is due, the process handler updates recipient state and triggers side effects, and a dedicated email job notifies the owner.",
+      "difficulty": "medium",
+      "subsystem": "expiration"
+    }
+  ]
+}

@@ -1,0 +1,133 @@
+{
+  "repo": "posthog",
+  "commit": "6577fc44f726da86da4288e5a8ef011571a80c47",
+  "cases": [
+    {
+      "id": "posthog-01",
+      "question": "For a normal analytics capture event, which code path turns the Rust capture request into a Kafka message that Node later serializes for the ClickHouse events table, including the final Kafka-engine schema that consumes it?",
+      "groundTruthFiles": [
+        "rust/capture/src/events/analytics.rs",
+        "nodejs/src/ingestion/common/steps/event-processing/emit-event-step.ts",
+        "posthog/models/event/sql.py"
+      ],
+      "rationale": "These files jointly show Rust capture's analytics processing/routing contract, Node's final event serialization and Kafka produce shape, and the ClickHouse kafka_events_json/materialized-view schema that ingests that shape. Answering requires following a Rust-to-Node-to-Python/ClickHouse handoff rather than grepping one symbol."
+    },
+    {
+      "id": "posthog-02",
+      "question": "Which files define the session replay invariant that capture stamps token/session_id/distinct_id headers, the Node replay ingester rejects mismatches against the body, and accepted messages become aggregated session_replay_events rows?",
+      "groundTruthFiles": [
+        "rust/capture/src/events/recordings.rs",
+        "nodejs/src/ingestion/pipelines/sessionreplay/validate-headers-step.ts",
+        "nodejs/src/ingestion/pipelines/sessionreplay/parse-message-step.ts",
+        "posthog/session_recordings/sql/session_replay_event_sql.py"
+      ],
+      "rationale": "The answer spans replay-specific Rust capture parsing, Node header narrowing, Node body/header consistency checks, and the ClickHouse replay-event table/MV definitions. A cold agent has to connect capture-time guarantees to ingestion-time validation and storage."
+    },
+    {
+      "id": "posthog-03",
+      "question": "When an ingested $identify or $create_alias event causes two persons to merge, which files show how the ingestion pipeline chooses the merge path, handles limit/race outcomes, and builds the committed person-merge Kafka message for downstream consumers?",
+      "groundTruthFiles": [
+        "nodejs/src/ingestion/common/steps/event-processing/process-persons-step.ts",
+        "nodejs/src/ingestion/common/persons/person-event-processor.ts",
+        "nodejs/src/ingestion/common/persons/person-merge-service.ts",
+        "nodejs/src/ingestion/common/persons/person-merge-event.ts"
+      ],
+      "rationale": "These files cover the pipeline step that wires person processing, the orchestrator that handles merge outcomes, the service that detects identify/alias merge cases, and the Kafka wire shape/partitioning for committed merge events. The behavior is distributed across several Node modules and is not obvious from filenames alone."
+    },
+    {
+      "id": "posthog-04",
+      "question": "Which files explain how ingestion-event timestamp deduplication filters duplicates, publishes duplicate-detection records, and maps those records into the ClickHouse duplicate_events table?",
+      "groundTruthFiles": [
+        "rust/kafka-deduplicator/src/pipelines/ingestion_events/processor.rs",
+        "rust/kafka-deduplicator/src/pipelines/timestamp_deduplicator.rs",
+        "rust/kafka-deduplicator/src/pipelines/ingestion_events/duplicate_event.rs",
+        "posthog/models/duplicate_events/sql.py"
+      ],
+      "rationale": "The processor owns the ingestion-events pipeline and duplicate publishing, the generic timestamp deduplicator owns the RocksDB/batch algorithm, DuplicateEvent defines the emitted payload, and the Python SQL defines the Kafka table and materialized view that store it. This crosses Rust service logic and Python ClickHouse schema."
+    },
+    {
+      "id": "posthog-05",
+      "question": "When an InsightVizNode is rendered in the frontend, which files show how its source query is handed to the data-node loader, posted to the /query API with dashboard filter and variable overrides, and then dispatched into the backend query-runner pipeline?",
+      "groundTruthFiles": [
+        "frontend/src/queries/nodes/InsightViz/InsightViz.tsx",
+        "frontend/src/queries/nodes/DataNode/dataNodeLogic.ts",
+        "frontend/src/queries/query.ts",
+        "posthog/api/query.py"
+      ],
+      "rationale": "InsightViz.tsx unwraps query.source into dataNodeLogic props, dataNodeLogic.ts calls performQuery with refresh/query ID/filter/variable context, query.ts wraps the API call and polling behavior, and posthog/api/query.py receives QueryRequest and invokes backend processing. This requires following a TS component-to-kea-to-API-to-Django flow, not a single symbol lookup."
+    },
+    {
+      "id": "posthog-06",
+      "question": "For a normal TrendsQuery that is not a calendar heatmap, box plot, or slope graph, which files identify the backend runner selected for it and show how the runner turns each series into HogQL AST queries that are UNIONed and sent toward ClickHouse?",
+      "groundTruthFiles": [
+        "posthog/hogql_queries/query_runner.py",
+        "posthog/hogql_queries/insights/trends/trends_query_runner.py",
+        "posthog/hogql_queries/insights/trends/trends_query_builder.py"
+      ],
+      "rationale": "query_runner.py contains the TrendsQuery dispatch and display-specific exceptions, trends_query_runner.py loops over resolved series and builds a UNION ALL AST, and trends_query_builder.py constructs the per-series select AST including breakdown and display handling. Answering this means tracing registry dispatch into the query-builder internals."
+    },
+    {
+      "id": "posthog-07",
+      "question": "For a FunnelsQuery in steps mode with breakdowns, which files show how the backend normalizes funnel context, chooses the funnel runner, builds the aggregate_funnel UDF query, and executes it as HogQL against ClickHouse?",
+      "groundTruthFiles": [
+        "posthog/hogql_queries/query_runner.py",
+        "posthog/hogql_queries/insights/funnels/funnels_query_runner.py",
+        "posthog/hogql_queries/insights/funnels/funnel_query_context.py",
+        "posthog/hogql_queries/insights/funnels/funnel.py"
+      ],
+      "rationale": "query_runner.py selects FunnelsQueryRunner, funnels_query_runner.py owns calculation and execute_hogql_query, funnel_query_context.py derives funnel filter defaults and breakdown semantics, and funnel.py builds the aggregate_funnel/aggregate_funnel_array/cohort UDF SQL AST. The behavior is spread across dispatch, context, execution, and query construction."
+    },
+    {
+      "id": "posthog-08",
+      "question": "When a Trends insight is displayed as a calendar heatmap, which files show the frontend component consuming calendar_heatmap_data and the backend detour that converts the TrendsQuery into a CalendarHeatmapQuery before building the ClickHouse aggregation?",
+      "groundTruthFiles": [
+        "frontend/src/scenes/insights/views/CalendarHeatMap/TrendsCalendarHeatMap.tsx",
+        "posthog/hogql_queries/query_runner.py",
+        "posthog/hogql_queries/insights/trends/calendar_heatmap_trends_query_runner.py",
+        "posthog/hogql_queries/insights/trends/calendar_heatmap_query_runner.py"
+      ],
+      "rationale": "The frontend heatmap view consumes processed heatmap data, query_runner.py routes TrendsQuery with CALENDAR_HEATMAP display to a special wrapper, calendar_heatmap_trends_query_runner.py converts the trends response shape, and calendar_heatmap_query_runner.py builds the actual hour/day ClickHouse query. This is a cross-stack display-specific path that is easy to miss from either side alone."
+    },
+    {
+      "id": "posthog-09",
+      "question": "Which files determine how the feature flag editor switches between boolean, multivariate, and remote config modes, how variant payloads are persisted and validated, and how the test-evaluation endpoint returns the evaluated variant or payload?",
+      "groundTruthFiles": [
+        "frontend/src/scenes/feature-flags/FeatureFlagForm.tsx",
+        "products/feature_flags/backend/api/feature_flag.py"
+      ],
+      "rationale": "The frontend file owns the flag type selector, variant rollout fields, and payload editing state, while the backend API file validates multivariate payload keys, remote-config encrypted payload invariants, and calls the flag evaluation service for test results. This requires following UI state into serializer validation and evaluation behavior, not just finding one symbol."
+    },
+    {
+      "id": "posthog-10",
+      "question": "Which files show how a new experiment's feature flag key and variants are submitted from the frontend, turned into or linked to a backend FeatureFlag, and later used to build the experiment exposures series?",
+      "groundTruthFiles": [
+        "frontend/src/scenes/experiments/ExperimentForm/createExperimentLogic.ts",
+        "products/experiments/backend/experiment_service.py",
+        "products/experiments/backend/hogql_queries/experiment_exposures_query_runner.py"
+      ],
+      "rationale": "The create logic sends the experiment payload with feature flag data, the service validates and creates or reuses the linked FeatureFlag via FeatureFlagSerializer, and the exposures runner reads the linked flag's multivariate variants for analysis. Answering this requires crossing frontend creation, backend persistence, and HogQL result generation."
+    },
+    {
+      "id": "posthog-11",
+      "question": "Which files back the flow where launching or saving a survey from the wizard persists survey targeting and response-limit settings, creates internal survey feature flags, and stops or throttles surveys based on collected responses?",
+      "groundTruthFiles": [
+        "frontend/src/scenes/surveys/wizard/surveyWizardLogic.ts",
+        "products/surveys/backend/api/survey.py",
+        "posthog/tasks/stop_surveys_reached_target.py",
+        "posthog/tasks/update_survey_adaptive_sampling.py"
+      ],
+      "rationale": "The wizard creates or updates surveys, the serializer validates targeting and response sampling fields while creating internal targeting/sampling flags, and the scheduled tasks query survey sent events to end surveys or adjust sampling rollout. The behavior spans TS UI, DRF serializer side effects, and background ClickHouse-backed enforcement."
+    },
+    {
+      "id": "posthog-12",
+      "question": "Which files explain how billing limits are edited in the billing UI, sent to the billing API, reconciled into organization usage and quota state, and then enforced for data warehouse sync jobs?",
+      "groundTruthFiles": [
+        "frontend/src/scenes/billing/BillingLimit.tsx",
+        "frontend/src/scenes/billing/billingLogic.tsx",
+        "ee/billing/billing_manager.py",
+        "products/warehouse_sources/backend/temporal/data_imports/workflow_activities/check_billing_limits.py"
+      ],
+      "rationale": "The billing limit component and product logic own the per-product edit controls, billingLogic sends custom_limits_usd to api/billing, BillingManager updates local usage and quotas from billing service responses, and the warehouse activity checks quota limiting before continuing syncs. This is a frontend-to-backend-to-Temporal enforcement path."
+    }
+  ]
+}

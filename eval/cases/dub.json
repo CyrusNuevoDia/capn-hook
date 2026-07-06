@@ -1,0 +1,161 @@
+{
+  "repo": "dub",
+  "commit": "51e5a8fd38923d8ae83c215a9e82b8994a81d4c7",
+  "cases": [
+    {
+      "id": "dub-01",
+      "question": "When a short link resolves, where is the final destination URL chosen across bot proxying, custom URI schemes, iOS/Android targeting, and geo targeting?",
+      "groundTruthFiles": [
+        "apps/web/lib/middleware/link.ts",
+        "apps/web/lib/middleware/utils/get-final-url.ts",
+        "apps/web/lib/middleware/utils/detect-bot.ts",
+        "apps/web/lib/middleware/utils/is-supported-custom-uri-scheme.ts"
+      ],
+      "rationale": "The redirect decision tree, destination URL mutation, bot classification, and the custom-URI-scheme predicate are spread across the link middleware and its helpers, not a single handler.",
+      "difficulty": "hard",
+      "subsystem": "redirect"
+    },
+    {
+      "id": "dub-02",
+      "question": "How does a click from the redirect path get deduplicated and recorded to analytics?",
+      "groundTruthFiles": [
+        "apps/web/lib/middleware/link.ts",
+        "apps/web/lib/tinybird/record-click.ts",
+        "apps/web/lib/api/links/record-click-cache.ts",
+        "packages/tinybird/datasources/dub_click_events.datasource"
+      ],
+      "rationale": "The redirect schedules recording while record-click owns bot suppression, identity dedupe via a Redis cache, counter updates, and the Tinybird write into the click events datasource.",
+      "difficulty": "hard",
+      "subsystem": "click-ingestion"
+    },
+    {
+      "id": "dub-03",
+      "question": "Where are aggregate analytics API requests translated into Tinybird pipe calls?",
+      "groundTruthFiles": [
+        "apps/web/app/api/analytics/route.ts",
+        "apps/web/lib/analytics/get-analytics.ts",
+        "apps/web/lib/analytics/filter-helpers.ts",
+        "packages/tinybird/pipes/v4_group_by.pipe"
+      ],
+      "rationale": "The route handles workspace access and query semantics; get-analytics builds Tinybird params, applies filters, and selects the v4 pipe that runs the query.",
+      "difficulty": "hard",
+      "subsystem": "analytics"
+    },
+    {
+      "id": "dub-04",
+      "question": "Where do Stripe subscription webhooks update a workspace's plan and feature limits?",
+      "groundTruthFiles": [
+        "apps/web/app/(ee)/api/stripe/webhook/route.ts",
+        "apps/web/app/(ee)/api/stripe/webhook/customer-subscription-updated.ts",
+        "apps/web/app/(ee)/api/stripe/webhook/utils/update-workspace-plan.ts",
+        "packages/utils/src/constants/pricing/pricing-plans.tsx"
+      ],
+      "rationale": "The event dispatcher, the subscription-updated handler, the plan/limit mutation with its downgrade side effects, and the pricing constants are all in separate files.",
+      "difficulty": "hard",
+      "subsystem": "billing"
+    },
+    {
+      "id": "dub-05",
+      "question": "Where does workspace API authentication apply Bearer API keys, session fallback, token scopes, and plan-aware rate limits?",
+      "groundTruthFiles": [
+        "apps/web/lib/auth/workspace.ts",
+        "apps/web/lib/api/tokens/scopes.ts",
+        "apps/web/lib/auth/rate-limit-request.ts",
+        "apps/web/lib/api/get-ratelimit-for-plan.ts"
+      ],
+      "rationale": "The withWorkspace wrapper combines auth-mode detection, token cache/DB lookup, scope narrowing, and plan-derived rate limiting; each concern lives in a different helper.",
+      "difficulty": "hard",
+      "subsystem": "api-auth"
+    },
+    {
+      "id": "dub-06",
+      "question": "Where are workspace API keys created and constrained by role-based scopes?",
+      "groundTruthFiles": [
+        "apps/web/app/api/tokens/route.ts",
+        "apps/web/app/api/tokens/[id]/route.ts",
+        "apps/web/lib/api/tokens/scopes.ts",
+        "apps/web/lib/auth/workspace.ts"
+      ],
+      "rationale": "Token CRUD, the scope catalog and role-to-scope mapping, and request-time scope enforcement are not co-located, so key issuance is distinct from the runtime auth wrapper.",
+      "difficulty": "medium",
+      "subsystem": "api-auth"
+    },
+    {
+      "id": "dub-07",
+      "question": "When a custom domain is added to a workspace, where is it registered with Vercel and where is its root-domain link created?",
+      "groundTruthFiles": [
+        "apps/web/app/api/domains/route.ts",
+        "apps/web/lib/api/domains/add-domain-vercel.ts",
+        "apps/web/lib/api/links/create-link.ts"
+      ],
+      "rationale": "Domain creation does plan checks and Vercel registration, then creates the root link through the shared link API helper rather than inline.",
+      "difficulty": "medium",
+      "subsystem": "domains"
+    },
+    {
+      "id": "dub-08",
+      "question": "Where is a link create request validated and persisted after the API route parses it?",
+      "groundTruthFiles": [
+        "apps/web/app/api/links/route.ts",
+        "apps/web/lib/api/links/process-link.ts",
+        "apps/web/lib/api/links/create-link.ts",
+        "apps/web/lib/api/links/usage-checks.ts"
+      ],
+      "rationale": "The route is thin; the real behavior spans usage gating, plan/domain/key validation, the Prisma write, cache updates, and Tinybird link metadata.",
+      "difficulty": "hard",
+      "subsystem": "link-crud"
+    },
+    {
+      "id": "dub-09",
+      "question": "Where are link.clicked webhooks drained from the Redis click stream and filtered by workspace, link, or folder scope before delivery?",
+      "groundTruthFiles": [
+        "apps/web/lib/upstash/redis-streams/workspace-click-events.ts",
+        "apps/web/app/(ee)/api/cron/streams/send-link-clicked-webhooks/route.ts",
+        "apps/web/lib/webhook/transform.ts",
+        "apps/web/lib/webhook/qstash.ts"
+      ],
+      "rationale": "The click recorder only publishes stream entries; a cron later loads webhook scopes, enriches links, transforms payloads, and enqueues QStash deliveries.",
+      "difficulty": "hard",
+      "subsystem": "webhooks"
+    },
+    {
+      "id": "dub-10",
+      "question": "Where do tracked leads and sales create partner commission workflow jobs?",
+      "groundTruthFiles": [
+        "apps/web/lib/api/conversions/track-lead.ts",
+        "apps/web/lib/api/conversions/track-sale.ts",
+        "apps/web/lib/partners/queue-partner-commission-creation.ts",
+        "apps/web/app/(ee)/api/workflows/create-partner-commission/route.ts"
+      ],
+      "rationale": "Conversion tracking records events and stats, then queues a serialized QStash workflow that calculates and persists the partner commission in a separate route.",
+      "difficulty": "hard",
+      "subsystem": "partners"
+    },
+    {
+      "id": "dub-11",
+      "question": "Where are due partner commissions aggregated into payouts and then charged for processing?",
+      "groundTruthFiles": [
+        "apps/web/app/(ee)/api/cron/payouts/aggregate-due-commissions/route.ts",
+        "apps/web/app/(ee)/api/cron/payouts/process/route.ts",
+        "apps/web/app/(ee)/api/cron/payouts/process/process-payouts.ts",
+        "apps/web/lib/api/payouts/payout-eligibility-filter.ts"
+      ],
+      "rationale": "An hourly cron builds payout rows from eligible commissions, while a separate QStash job marks payouts processing and creates Stripe payment intents.",
+      "difficulty": "hard",
+      "subsystem": "payouts"
+    },
+    {
+      "id": "dub-12",
+      "question": "Where do connected Stripe integration webhooks turn customer, checkout, and invoice events into Dub lead and sale attribution?",
+      "groundTruthFiles": [
+        "apps/web/app/(ee)/api/stripe/integration/webhook/route.ts",
+        "apps/web/app/(ee)/api/stripe/integration/webhook/customer-created.ts",
+        "apps/web/app/(ee)/api/stripe/integration/webhook/checkout-session-completed.ts",
+        "apps/web/app/(ee)/api/stripe/integration/webhook/invoice-paid.ts"
+      ],
+      "rationale": "Distinct from platform billing: connected-account Stripe events attribute external customers, record Tinybird lead/sale events, and trigger commissions.",
+      "difficulty": "hard",
+      "subsystem": "integrations"
+    }
+  ]
+}

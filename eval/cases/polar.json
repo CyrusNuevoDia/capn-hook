@@ -1,0 +1,158 @@
+{
+  "repo": "polar",
+  "commit": "97e9430901a4197876318672cdd4fae99fc49a2b",
+  "cases": [
+    {
+      "id": "polar-01",
+      "question": "When a checkout is confirmed, where are the required buyer fields validated, tax calculated, and the Stripe intent created or confirmed (including marking free checkouts for async success handling)?",
+      "groundTruthFiles": [
+        "server/polar/checkout/endpoints.py",
+        "server/polar/checkout/service.py",
+        "server/polar/integrations/stripe/service.py"
+      ],
+      "rationale": "The endpoint only delegates; the real confirmation path is buried in CheckoutService, which calls the Stripe integration service to create the intent.",
+      "difficulty": "medium",
+      "subsystem": "checkout"
+    },
+    {
+      "id": "polar-02",
+      "question": "Where are incoming Stripe webhook requests signature-verified, stored as external events, and dispatched to typed background actors?",
+      "groundTruthFiles": [
+        "server/polar/integrations/stripe/endpoints.py",
+        "server/polar/external_event/service.py",
+        "server/polar/integrations/stripe/tasks.py"
+      ],
+      "rationale": "Ingress verification, durable external-event storage, and Stripe-specific actor routing are separated across three files.",
+      "difficulty": "hard",
+      "subsystem": "stripe-webhooks"
+    },
+    {
+      "id": "polar-03",
+      "question": "Where does a Stripe charge become both a Payment row and a ledger payment transaction carrying settlement currency, tax metadata, and processor fees?",
+      "groundTruthFiles": [
+        "server/polar/payment/service.py",
+        "server/polar/transaction/service/payment.py",
+        "server/polar/transaction/tasks.py",
+        "server/polar/transaction/service/processor_fee.py"
+      ],
+      "rationale": "Payment state and the accounting transaction are separate concerns, and processor-fee creation is queued via a transaction actor only after the transaction exists.",
+      "difficulty": "hard",
+      "subsystem": "payments-ledger"
+    },
+    {
+      "id": "polar-04",
+      "question": "Where does a subscription renewal cycle apply pending updates, advance billing periods, create the renewal order, and cycle or revoke benefits?",
+      "groundTruthFiles": [
+        "server/polar/subscription/tasks.py",
+        "server/polar/subscription/service.py",
+        "server/polar/order/service.py",
+        "server/polar/benefit/grant/service.py"
+      ],
+      "rationale": "The scheduler actor enters SubscriptionService.cycle, which fans out into order creation and benefit cycling in adjacent services.",
+      "difficulty": "hard",
+      "subsystem": "subscriptions"
+    },
+    {
+      "id": "polar-05",
+      "question": "Where are pending subscription billing entries turned into order line items, taxed, paid, and optionally reset against meters?",
+      "groundTruthFiles": [
+        "server/polar/order/service.py",
+        "server/polar/billing_entry/service.py",
+        "server/polar/tax/calculation/__init__.py",
+        "server/polar/subscription/service.py"
+      ],
+      "rationale": "The order service owns finalization, but line items, tax, and subscription/meter reset state come from adjacent services.",
+      "difficulty": "hard",
+      "subsystem": "orders-billing"
+    },
+    {
+      "id": "polar-06",
+      "question": "Where is benefit granting and revocation orchestrated for a customer purchase, including de-duplicating existing grants and dispatching per-benefit jobs?",
+      "groundTruthFiles": [
+        "server/polar/benefit/tasks.py",
+        "server/polar/benefit/grant/service.py",
+        "server/polar/benefit/grant/scope.py"
+      ],
+      "rationale": "The public notion of entitlement hides a queue pipeline plus grant-scope resolution and existing-grant state checks.",
+      "difficulty": "hard",
+      "subsystem": "benefits"
+    },
+    {
+      "id": "polar-07",
+      "question": "Where are outgoing webhook payloads selected, serialized for raw/Discord/Slack formats, signed, delivered, and retried in FIFO order?",
+      "groundTruthFiles": [
+        "server/polar/webhook/service.py",
+        "server/polar/webhook/webhooks.py",
+        "server/polar/webhook/tasks.py"
+      ],
+      "rationale": "Payload construction, endpoint/event creation, and HTTP delivery/retry behavior are distinct layers in separate files.",
+      "difficulty": "hard",
+      "subsystem": "outgoing-webhooks"
+    },
+    {
+      "id": "polar-08",
+      "question": "Where does the API decide whether a request's subject is a user, organization, customer, member, or anonymous, and enforce the required scopes?",
+      "groundTruthFiles": [
+        "server/polar/auth/dependencies.py",
+        "server/polar/auth/middlewares.py",
+        "server/polar/auth/models.py",
+        "server/polar/auth/scope.py"
+      ],
+      "rationale": "Subject resolution from bearer/session credentials happens in the auth middlewares, while dependencies, models, and scope handle typing and enforcement.",
+      "difficulty": "medium",
+      "subsystem": "auth"
+    },
+    {
+      "id": "polar-09",
+      "question": "Where are product price shapes validated at creation and later selected at checkout for currency, custom pricing, seat pricing, and upfront amount?",
+      "groundTruthFiles": [
+        "server/polar/product/service.py",
+        "server/polar/product/guard.py",
+        "server/polar/product/price_set.py",
+        "server/polar/checkout/service.py"
+      ],
+      "rationale": "Product-creation validation and checkout-time price selection are split, and price types are encoded through guard helpers.",
+      "difficulty": "medium",
+      "subsystem": "products-prices"
+    },
+    {
+      "id": "polar-10",
+      "question": "Where is merchant-of-record tax calculated during checkout/order creation and later recorded or reverted through the tax processor?",
+      "groundTruthFiles": [
+        "server/polar/checkout/service.py",
+        "server/polar/order/service.py",
+        "server/polar/tax/calculation/__init__.py",
+        "server/polar/tax/calculation/stripe.py"
+      ],
+      "rationale": "Tax is estimated before payment in the checkout/order paths, then recorded or reverted after payment via the tax calculation abstraction.",
+      "difficulty": "hard",
+      "subsystem": "tax"
+    },
+    {
+      "id": "polar-11",
+      "question": "Where are seller payout eligibility, Stripe/manual payout account state, payout transaction creation, and payout reversals handled?",
+      "groundTruthFiles": [
+        "server/polar/payout/service.py",
+        "server/polar/payout_account/service.py",
+        "server/polar/transaction/service/payout.py",
+        "server/polar/integrations/stripe/tasks.py"
+      ],
+      "rationale": "The payout lifecycle spans seller account onboarding, payout business rules, ledger transaction creation, and Stripe webhook updates.",
+      "difficulty": "hard",
+      "subsystem": "payouts"
+    },
+    {
+      "id": "polar-12",
+      "question": "Where are usage events ingested, attached to meters, forwarded to Tinybird, and used to update per-customer meter balances?",
+      "groundTruthFiles": [
+        "server/polar/event/service.py",
+        "server/polar/event/tasks.py",
+        "server/polar/customer_meter/service.py",
+        "server/polar/customer_meter/tasks.py"
+      ],
+      "rationale": "The request path only inserts events; parent resolution, Tinybird ingestion, and customer-meter balance updates happen asynchronously in separate modules.",
+      "difficulty": "hard",
+      "subsystem": "usage-billing"
+    }
+  ]
+}
