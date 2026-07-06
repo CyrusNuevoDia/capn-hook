@@ -4,8 +4,8 @@ Capn Hook is dynamic memory for coding agents: chart discoveries as markdown ent
 
 ## Ground rules
 
-- **GOAL.md is the contract.** It is a cold-runnable verifier; the implementation exists to pass it. Never edit GOAL.md to make a failing condition pass — spec changes are explicit, human-approved revisions.
-- **Verifier-first workflow:** change the contract docs (GOAL.md/README.md) before or with behavior changes, then make `bun test` and the E2E prove it.
+- **The tests are the contract.** GOAL.md is gone — retired before publish (`4c8bbef`); don't go looking for it. `bun test` plus the agent E2E verify behavior. Never weaken or delete a test to make the suite pass — spec changes are explicit, human-approved revisions.
+- **Verifier-first workflow:** change the contract docs (README.md) and tests before or with behavior changes, then make `bun test` and the E2E prove it.
 - **Chart or unchart, never update** applies to chart entries by design. Do not build entry-mutation features.
 
 ## Layout
@@ -14,26 +14,31 @@ Capn Hook is dynamic memory for coding agents: chart discoveries as markdown ent
 | --- | --- |
 | `bin/capn`, `src/run.ts`, `src/capn.ts` | Executable launcher, runtime entrypoint, and command dispatch |
 | `src/commands.ts` | Command handlers and command-local helpers |
-| `src/{project,entries,journal,store,hooks,util}.ts` | Flat storage, project pathing, hook, QMD store, and utility modules |
+| `src/{project,entries,store,hooks,util}.ts` | Flat storage, project pathing, hook, QMD store, and utility modules |
 | `tests/capn.test.ts` | bun:test suite |
 | `tests/agent-e2e.sh` | Two-phase codex-in-the-loop E2E |
 | `tests/treasure-cove/` | Fixture codebase. Must never mention capn — agents under test learn only from `capn context` output |
-| `GOAL.md` | Cold-audit verifier (v0.5) |
+| `eval/` | Token-cost eval corpus, harness, and committed run evidence. Read `eval/README.md` before touching `eval/run.ts` or running the harness |
 | `docs/shaping.md`, `docs/frame.md` | Design history (shaping method) |
 
 ## Conventions
 
 - Tests are **subprocess-only**: spawn the CLI in mktemp dirs, assert on exit codes/stdout/files. Never import functions from `src/` in tests. Never touch the repo's own `.capn/`, `.claude/`, `.codex/`, or `.capn/qmd/` from tests.
+- Tests run **concurrently** (`test.concurrent`, whole suite ~1.5s): every test mints its own workspace via `workspace()` — own mktemp dir, own `HOME` — and awaits async `execa`. Never `execaSync`, never shared module state between tests. `bun test` discovery is scoped to `tests/` by `bunfig.toml`.
 - Tests must pass on a machine with **no GGUF models**: init with `--no-embedding` (BM25). Embedding-path tests must `skipIf` models are absent.
 - Chart entries use `chart`/`unchart` naming; the old `add`/`delete` commands are intentionally gone.
+- CLI contract (v0.2+): `capn chart "<question>" --files <files> [--details "<extras>"]` — the files ARE the answer; there is no positional answer argument. `capn ask` emits ranked JSONL (one object per line — parse line-by-line, never as a single blob); a miss exits 1 with the hint on stderr. User-visible CLI changes need a changeset.
 - Identifier naming: acronyms stay uppercase (`JSON`, `URL`, `DB`); the `Id` suffix stays mixed-case (`entryId`, `sessionId`).
 - Keep `src/` flat and lean — storage libs plus one `commands.ts`; no speculative options. The executable package bin stays `bin/capn`; `src/capn.ts` stays importable command dispatch. The `@tobilu/qmd` import stays dynamic inside `openStore`.
 
 ## Gotchas (learned the hard way)
 
 - `bun link` does NOT put the `capn` bin on PATH. Symlink the launcher instead: `ln -s "$PWD/bin/capn" <dir-on-PATH>/capn`.
-- capn's index state lives in `.capn/qmd/index.sqlite` — capn must never create a `.qmd/` at a host project's root; that dir belongs to the host's own qmd install (GOAL group X guards this).
-- The launcher resolves `src/run.ts` from its own realpath, so the capn repo's node_modules is what loads — keep `npm install` or `bun install` fresh there. Bun silently auto-installs from its global cache if no node_modules is found; don't rely on it.
+- capn's index state lives in `.capn/qmd/index.sqlite` — capn must never create a `.qmd/` at a host project's root; that dir belongs to the host's own qmd install (the host-qmd coexistence test guards this).
+- **Stale `dist/` masks source changes.** `bin/capn` prefers `dist/capn.js` when it exists and only falls back to `src/run.ts`. After editing `src/`, run `bun run build` (or remove `dist/`) before trusting any subprocess behavior — installed CLI, tests through `bin/capn`, `capn context` output. This has burned four separate sessions.
+- The launcher resolves its entry from its own realpath, so the capn repo's node_modules is what loads — keep `npm install` or `bun install` fresh there. Bun silently auto-installs from its global cache if no node_modules is found; don't rely on it.
+- Hooks are a single command string, `/usr/bin/env capn context`. Codex ignores `args` arrays, and a bare `/usr/bin/env` dumps every env var into session context. Claude hooks belong in `.claude/settings.json`, not `settings.local.json`. Non-interactive `codex exec` (as of 0.142.5) fires no SessionStart hooks at all — inject `capn context` through the prompt instead.
+- Broad `rg`/`fd` invocations wander into heavyweight ignored trees (`eval/repos/`, `eval/runs/work/`, `motion/node_modules/`, `motion/out/`) and drown in output — scope commands away from them unless you're working there. (`bun test` is already fenced by `bunfig.toml`.)
 - sqlite `-wal`/`-shm` files beside `index.sqlite` are normal; the sqlite is disposable — `capn init` rebuilds it from the markdown.
 - The whole `.capn/` directory is gitignored local memory (`capn init` manages the line) — tests must not assume any of it is committed.
 - Sandboxed builders usually cannot write `.git` — don't attempt commits from a sandbox; the orchestrating session commits.
@@ -45,11 +50,16 @@ Capn Hook is dynamic memory for coding agents: chart discoveries as markdown ent
 ```sh
 npm install              # deps (@tobilu/qmd; postinstalls build node-llama-cpp)
 bun install              # equivalent Bun install path
+just install             # bun install + symlink bin/capn into ~/.local/bin
 bun test                 # fast hermetic suite
+bun test -t "<pattern>"  # single test by name filter
+bun run build            # bundle src/run.ts -> dist/capn.js (bin/capn prefers dist!)
+just fmt                 # ultracite fix — run before committing
+just check               # tsgo typecheck + ultracite check + bun test (the CI gate)
 sh tests/agent-e2e.sh    # agent E2E — spawns codex twice, costs real LLM calls
 ```
 
-Run the E2E and any GOAL.md audit from a session that can afford LLM spend; don't wire them into reflexive pre-commit automation.
+Run the E2E from a session that can afford LLM spend; don't wire it into reflexive pre-commit automation.
 
 ## Releases
 
@@ -65,124 +75,4 @@ When those changes land on `main`, the `release-cli` workflow runs `just check`,
 
 # Ultracite Code Standards
 
-This project uses **Ultracite**, a zero-config preset that enforces strict code quality standards through automated formatting and linting.
-
-## Quick Reference
-
-- **Format code**: `bun x ultracite fix`
-- **Check for issues**: `bun x ultracite check`
-- **Diagnose setup**: `bun x ultracite doctor`
-
-Biome (the underlying engine) provides robust linting and formatting. Most issues are automatically fixable.
-
----
-
-## Core Principles
-
-Write code that is **accessible, performant, type-safe, and maintainable**. Focus on clarity and explicit intent over brevity.
-
-### Type Safety & Explicitness
-
-- Use explicit types for function parameters and return values when they enhance clarity
-- Prefer `unknown` over `any` when the type is genuinely unknown
-- Use const assertions (`as const`) for immutable values and literal types
-- Leverage TypeScript's type narrowing instead of type assertions
-- Use meaningful variable names instead of magic numbers - extract constants with descriptive names
-
-### Modern JavaScript/TypeScript
-
-- Use arrow functions for callbacks and short functions
-- Prefer `for...of` loops over `.forEach()` and indexed `for` loops
-- Use optional chaining (`?.`) and nullish coalescing (`??`) for safer property access
-- Prefer template literals over string concatenation
-- Use destructuring for object and array assignments
-- Use `const` by default, `let` only when reassignment is needed, never `var`
-
-### Async & Promises
-
-- Always `await` promises in async functions - don't forget to use the return value
-- Use `async/await` syntax instead of promise chains for better readability
-- Handle errors appropriately in async code with try-catch blocks
-- Don't use async functions as Promise executors
-
-### React & JSX
-
-- Use function components over class components
-- Call hooks at the top level only, never conditionally
-- Specify all dependencies in hook dependency arrays correctly
-- Use the `key` prop for elements in iterables (prefer unique IDs over array indices)
-- Nest children between opening and closing tags instead of passing as props
-- Don't define components inside other components
-- Use semantic HTML and ARIA attributes for accessibility:
-  - Provide meaningful alt text for images
-  - Use proper heading hierarchy
-  - Add labels for form inputs
-  - Include keyboard event handlers alongside mouse events
-  - Use semantic elements (`<button>`, `<nav>`, etc.) instead of divs with roles
-
-### Error Handling & Debugging
-
-- Remove `console.log`, `debugger`, and `alert` statements from production code
-- Throw `Error` objects with descriptive messages, not strings or other values
-- Use `try-catch` blocks meaningfully - don't catch errors just to rethrow them
-- Prefer early returns over nested conditionals for error cases
-
-### Code Organization
-
-- Keep functions focused and under reasonable cognitive complexity limits
-- Extract complex conditions into well-named boolean variables
-- Use early returns to reduce nesting
-- Prefer simple conditionals over nested ternary operators
-- Group related code together and separate concerns
-
-### Security
-
-- Add `rel="noopener"` when using `target="_blank"` on links
-- Avoid `dangerouslySetInnerHTML` unless absolutely necessary
-- Don't use `eval()` or assign directly to `document.cookie`
-- Validate and sanitize user input
-
-### Performance
-
-- Avoid spread syntax in accumulators within loops
-- Use top-level regex literals instead of creating them in loops
-- Prefer specific imports over namespace imports
-- Avoid barrel files (index files that re-export everything)
-- Use proper image components (e.g., Next.js `<Image>`) over `<img>` tags
-
-### Framework-Specific Guidance
-
-**Next.js:**
-- Use Next.js `<Image>` component for images
-- Use `next/head` or App Router metadata API for head elements
-- Use Server Components for async data fetching instead of async Client Components
-
-**React 19+:**
-- Use ref as a prop instead of `React.forwardRef`
-
-**Solid/Svelte/Vue/Qwik:**
-- Use `class` and `for` attributes (not `className` or `htmlFor`)
-
----
-
-## Testing
-
-- Write assertions inside `it()` or `test()` blocks
-- Avoid done callbacks in async tests - use async/await instead
-- Don't use `.only` or `.skip` in committed code
-- Keep test suites reasonably flat - avoid excessive `describe` nesting
-
-## When Biome Can't Help
-
-Biome's linter will catch most issues automatically. Focus your attention on:
-
-1. **Business logic correctness** - Biome can't validate your algorithms
-2. **Meaningful naming** - Use descriptive names for functions, variables, and types
-3. **Architecture decisions** - Component structure, data flow, and API design
-4. **Edge cases** - Handle boundary conditions and error states
-5. **User experience** - Accessibility, performance, and usability considerations
-6. **Documentation** - Add comments for complex logic, but prefer self-documenting code
-
----
-
-Most formatting and common issues are automatically fixed by Biome. Run `bun x ultracite fix` before committing to ensure compliance.
+This project uses **Ultracite** (Biome) for formatting and linting: `bun x ultracite fix` to format, `bun x ultracite check` to verify — wrapped by `just fmt` / `just check`. Run `fix` before committing; the preset is strict and auto-fixes most issues. Spend review attention on what Biome can't judge: business-logic correctness, naming, API design, edge cases. Don't use `.only`/`.skip` in committed tests.
