@@ -4,4 +4,5 @@ dist/
 .codex/
 .capn/
 eval/repos/
-eval/runs/
+eval/runs/work/
+eval/runs/.capnbin/
