@@ -37,9 +37,9 @@ bun-debug.log*
 # Agent and memory state
 .qmd/
 .codex/
-.capn/
 
 # Eval sandboxes
 eval/repos/
 eval/runs/work/
 eval/runs/.capnbin/
+.capn/
