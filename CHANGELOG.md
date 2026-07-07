@@ -1,5 +1,11 @@
 # capn-hook
 
+## 0.2.2
+
+### Patch Changes
+
+- [`0142f76`](https://github.com/CyrusNuevoDia/capn-hook/commit/0142f76071ccba20a23b02667746cfc34becf57a) Thanks [@CyrusNuevoDia](https://github.com/CyrusNuevoDia)! - Simplify the `capn` launcher: it now always runs the bundled `dist/capn.js` (Bun when available, Node otherwise) and errors clearly if the bundle is missing. The undocumented-in-practice `CAPN_RUNTIME` override and the `src/run.ts` dev fallback are removed.
+
 ## 0.2.1
 
 ### Patch Changes
