@@ -8,7 +8,7 @@ Persistent memory for coding agents. When your agent spends ten minutes figuring
 
 Across 60 real developer questions on 5 production codebases (Dub, Polar, PostHog, Twenty, Documenso), an agent recalling from capn used **77% fewer tokens** than an agent exploring cold — every answer correct in both arms, the right chart recalled on all 60 questions, and a charting session paying for itself in ~1.6 recalls.
 
-[How the eval was run, full numbers, and raw evidence →](eval/RESULTS.md)
+[How the eval was run, full numbers, and raw evidence →](eval/RESULTS.md) · [Who capn is for →](docs/audience.md) · [Use cases →](docs/use-cases.md)
 
 ## The problem
 
@@ -26,7 +26,7 @@ From there the loop is three moves:
 capn ask "where are payment webhooks handled?"
 ```
 
-A hit returns JSONL with the exact files that answer the question, skipping the whole search. A miss costs seconds; re-exploring costs minutes.
+A hit returns JSONL with the exact files that answer the question, skipping the whole search. A miss exits 1 with a nudge on stderr to explore and chart what it finds — a miss costs seconds; re-exploring costs minutes.
 
 **2. Save what was expensive to learn.** When the agent works out an answer the hard way, it records a small, answerable question and the files that answer it, with optional details for extras like line numbers or gotchas:
 
