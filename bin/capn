@@ -12,36 +12,14 @@ while [ -L "$self" ]; do
 done
 
 bin_dir=$(CDPATH= cd -- "$(dirname -- "$self")" && pwd)
-package_dir=$(CDPATH= cd -- "$bin_dir/.." && pwd)
-if [ -f "$package_dir/dist/capn.js" ]; then
-  entry="$package_dir/dist/capn.js"
-else
-  entry="$package_dir/src/run.ts"
-fi
+entry="$bin_dir/../dist/capn.js"
 
-case "${CAPN_RUNTIME:-}" in
-  bun)
-    exec bun "$entry" "$@"
-    ;;
-  node)
-    if [ "${entry##*.}" = "ts" ]; then
-      exec node --experimental-strip-types "$entry" "$@"
-    fi
-    exec node "$entry" "$@"
-    ;;
-  "")
-    ;;
-  *)
-    echo "CAPN_RUNTIME must be 'bun' or 'node'" >&2
-    exit 2
-    ;;
-esac
+if [ ! -f "$entry" ]; then
+  echo "capn: dist/capn.js not found — run 'bun run build' in the capn-hook repo" >&2
+  exit 1
+fi
 
 if command -v bun >/dev/null 2>&1; then
   exec bun "$entry" "$@"
-fi
-
-if [ "${entry##*.}" = "ts" ]; then
-  exec node --experimental-strip-types "$entry" "$@"
 fi
 exec node "$entry" "$@"

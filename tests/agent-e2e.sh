@@ -18,6 +18,8 @@ command -v rg >/dev/null || { echo "FAIL: rg not on PATH"; exit 1; }
 command -v fd >/dev/null || { echo "FAIL: fd not on PATH"; exit 1; }
 test -x "$REPO/bin/capn" || { echo "FAIL: bin/capn missing or not executable"; exit 1; }
 
+(cd "$REPO" && bun run build) || { echo "FAIL: bun run build"; exit 1; }
+
 BIN=$(mktemp -d)
 ln -s "$REPO/bin/capn" "$BIN/capn"
 export PATH="$BIN:$PATH"

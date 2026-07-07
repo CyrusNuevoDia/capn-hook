@@ -5,6 +5,7 @@ install:
     set -euo pipefail
 
     bun install
+    bun run build
 
     bin_dir="${CAPN_BIN_DIR:-$HOME/.local/bin}"
     target="$bin_dir/capn"

@@ -35,7 +35,7 @@ Capn Hook is dynamic memory for coding agents: chart discoveries as markdown ent
 
 - `bun link` does NOT put the `capn` bin on PATH. Symlink the launcher instead: `ln -s "$PWD/bin/capn" <dir-on-PATH>/capn`.
 - capn's index state lives in `.capn/qmd/index.sqlite` — capn must never create a `.qmd/` at a host project's root; that dir belongs to the host's own qmd install (the host-qmd coexistence test guards this).
-- **Stale `dist/` masks source changes.** `bin/capn` prefers `dist/capn.js` when it exists and only falls back to `src/run.ts`. After editing `src/`, run `bun run build` (or remove `dist/`) before trusting any subprocess behavior — installed CLI, tests through `bin/capn`, `capn context` output. This has burned four separate sessions.
+- **Stale `dist/` masks source changes.** `bin/capn` runs only `dist/capn.js` (it errors if missing — no `src/` fallback). After editing `src/`, run `bun run build` before trusting any subprocess behavior — installed CLI, `capn context` output. (`just install` and the E2E build automatically; `tests/capn.test.ts` spawns `src/run.ts` directly and doesn't need it.) This has burned four separate sessions.
 - The launcher resolves its entry from its own realpath, so the capn repo's node_modules is what loads — keep `npm install` or `bun install` fresh there. Bun silently auto-installs from its global cache if no node_modules is found; don't rely on it.
 - Hooks are a single command string, `/usr/bin/env capn context`. Codex ignores `args` arrays, and a bare `/usr/bin/env` dumps every env var into session context. Claude hooks belong in `.claude/settings.json`, not `settings.local.json`. Non-interactive `codex exec` (as of 0.142.5) fires no SessionStart hooks at all — inject `capn context` through the prompt instead.
 - Broad `rg`/`fd` invocations wander into heavyweight ignored trees (`eval/repos/`, `eval/runs/work/`, `motion/node_modules/`, `motion/out/`) and drown in output — scope commands away from them unless you're working there. (`bun test` is already fenced by `bunfig.toml`.)
@@ -50,10 +50,10 @@ Capn Hook is dynamic memory for coding agents: chart discoveries as markdown ent
 ```sh
 npm install              # deps (@tobilu/qmd; postinstalls build node-llama-cpp)
 bun install              # equivalent Bun install path
-just install             # bun install + symlink bin/capn into ~/.local/bin
+just install             # bun install + build + symlink bin/capn into ~/.local/bin
 bun test                 # fast hermetic suite
 bun test -t "<pattern>"  # single test by name filter
-bun run build            # bundle src/run.ts -> dist/capn.js (bin/capn prefers dist!)
+bun run build            # bundle src/run.ts -> dist/capn.js (bin/capn runs dist only!)
 just fmt                 # ultracite fix — run before committing
 just check               # tsgo typecheck + ultracite check + bun test (the CI gate)
 sh tests/agent-e2e.sh    # agent E2E — spawns codex twice, costs real LLM calls

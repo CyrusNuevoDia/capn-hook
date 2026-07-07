@@ -56,7 +56,7 @@ capn init            # .capn/, capn's QMD index, Claude Code hooks, and Codex ho
 capn init --git      # also install a post-commit hook that prunes
 ```
 
-The published CLI ships as JavaScript and runs under Bun when Bun is available, falling back to Node.js. Set `CAPN_RUNTIME=node` or `CAPN_RUNTIME=bun` to force one runtime.
+The published CLI ships as JavaScript and runs under Bun when Bun is available, falling back to Node.js.
 
 Prefer to delegate? Tell your coding agent to fetch and follow [INSTALL.md](https://github.com/CyrusNuevoDia/capn-hook/blob/main/INSTALL.md) — it's written for the agent to execute, not for you to copy by hand.
 
