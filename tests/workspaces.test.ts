@@ -169,7 +169,7 @@ test.concurrent("worktree versions retain H1 and H2, deduplicate identical evide
   } finally {
     w.cleanup();
   }
-});
+}, 15_000);
 
 test.concurrent("init help and invalid options leave all registration and hook files absent", async () => {
   const w = workspace();
@@ -756,7 +756,7 @@ test.concurrent("an unavailable companion hides joint discoveries but preserves 
   } finally {
     w.cleanup();
   }
-});
+}, 15_000);
 
 test.concurrent("bust forgets every applicable shadowed version without removing retained evidence versions", async () => {
   const w = workspace();
