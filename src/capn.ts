@@ -11,7 +11,7 @@ import {
 
 export function usage() {
   return `Usage:
-  capn init [--git] [--embedding|--no-embedding]
+  capn init [--workspace <name>] [--repo <alias>] [--git] [--embedding|--no-embedding]
   capn context
   capn ask "<question>"
   capn chart "<question>" --files <a,b> [--details "<extra context>"]
@@ -43,7 +43,7 @@ export async function main(args = process.argv.slice(2)) {
   } else if (command === "unchart") {
     await deleteEntry(commandArgs[0]);
   } else if (command === "list") {
-    listEntries();
+    await listEntries();
   } else if (command === "context") {
     context();
   } else if (command === "init") {

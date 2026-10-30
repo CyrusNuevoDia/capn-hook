@@ -6,13 +6,13 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { execaSync } from "execa";
 
 type CommandHook = { args?: string[]; command?: string; type?: string };
 type HookGroup = { hooks?: CommandHook[] };
 type HookConfig = { hooks?: Record<string, HookGroup[]> };
 const contextHook = { command: "/usr/bin/env capn context" };
 const splitContextHook = { command: "/usr/bin/env", args: ["capn", "context"] };
-const trailingNewlinePattern = /\n$/;
 
 function sameArgs(left?: string[], right?: string[]) {
   const leftArgs = left ?? [];
@@ -162,7 +162,11 @@ export function installCodexHooks(root: string) {
 }
 
 export function installPostCommit(root: string) {
-  const hookPath = resolve(root, ".git/hooks/post-commit");
+  const hookPath = execaSync(
+    "git",
+    ["rev-parse", "--path-format=absolute", "--git-path", "hooks/post-commit"],
+    { cwd: root, env: { ...process.env, PWD: root } }
+  ).stdout.trim();
   const line = "capn prune";
   let body = "";
   mkdirSync(dirname(hookPath), { recursive: true });
@@ -176,22 +180,4 @@ export function installPostCommit(root: string) {
     writeFileSync(hookPath, body);
   }
   chmodSync(hookPath, 0o755);
-}
-
-export function ensureGitignore(root: string) {
-  const path = resolve(root, ".gitignore");
-  const body = existsSync(path) ? readFileSync(path, "utf8") : "";
-  const staleManaged = [".capn/qmd/", ".capn/journal/", ".capn/MIND.md"];
-  const managed = [".capn/"];
-  const lines =
-    body.length === 0
-      ? []
-      : body
-          .replace(trailingNewlinePattern, "")
-          .split("\n")
-          .filter(
-            (line) => !(managed.includes(line) || staleManaged.includes(line))
-          );
-  lines.push(...managed);
-  writeFileSync(path, `${lines.join("\n")}\n`);
 }

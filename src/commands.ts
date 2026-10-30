@@ -1,46 +1,44 @@
-import {
-  existsSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { basename } from "node:path";
 import { parseArgs } from "node:util";
 import {
+  applicable,
   deleteEntries,
   type Entry,
-  entryIsFresh,
+  entryIdPattern,
+  identity,
   readEntries,
-  readMap,
   writeEntry,
-  writeMap,
 } from "./entries.ts";
 import {
-  ensureGitignore,
   installClaudeHooks,
   installCodexHooks,
   installPostCommit,
 } from "./hooks.ts";
+import { checkout, entryPath } from "./project.ts";
 import {
-  config,
-  configPath,
-  ensureCapn,
-  entryPath,
-  findProjectRoot,
-  qmdDBPath,
-  relativeFile,
-} from "./project.ts";
-import { hitId, openStore, syncIndex } from "./store.ts";
+  discardGeneration,
+  hitId,
+  openStore,
+  prepareGeneration,
+} from "./store.ts";
 import { fail, sha256 } from "./util.ts";
-
-type InitOptions = { embedding?: boolean; git: boolean };
+import {
+  type Context,
+  cleanupBindings,
+  inWorkspace,
+  logicalFile,
+  persistBinding,
+} from "./workspaces.ts";
 
 const chartSyntax =
   'capn chart "<question>" --files <files> [--details "<extra context>"]';
-
-const noChartedAnswer = (question: string) =>
-  `No charted answer. Explore, then chart what you find:\n  capn chart "${question}" --files <files> [--details "<extra context>"]\n`;
-
+function miss(question: string) {
+  process.stderr.write(
+    `No charted answer. Explore, then chart what you find:\n  capn chart "${question}" --files <files> [--details "<extra context>"]\n`
+  );
+  process.exitCode = 1;
+}
 function splitFiles(value: string) {
   return value
     .split(",")
@@ -48,7 +46,18 @@ function splitFiles(value: string) {
     .filter(Boolean);
 }
 
-function parseChartArgs(args: string[]) {
+async function reconcile(context: Context, selection = applicable(context)) {
+  const generation = await prepareGeneration(
+    context.root,
+    selection.entries,
+    context.workspace.embedding
+  );
+  context.binding.generation = basename(generation);
+  await persistBinding(context);
+  return generation;
+}
+
+export async function chart(args: string[]) {
   const { positionals, values } = parseArgs({
     args,
     allowPositionals: true,
@@ -58,170 +67,227 @@ function parseChartArgs(args: string[]) {
     },
   });
   const [question, extra] = positionals;
+  const details = values.details ?? "";
+  const files = (values.files ?? []).flatMap(splitFiles);
   if (extra !== undefined) {
     fail(
       `capn chart no longer accepts a positional answer. Use:\n  ${chartSyntax}`
     );
   }
-  return {
-    details: values.details ?? "",
-    files: Array.isArray(values.files) ? values.files.flatMap(splitFiles) : [],
-    question,
-  };
-}
-
-export async function prune(
-  root = findProjectRoot(process.cwd()),
-  announce = true
-) {
-  readMap(root);
-  const entries = readEntries(root);
-  const stale = new Set(
-    entries
-      .filter((entry) => !entryIsFresh(root, entry))
-      .map((entry) => entry.id)
-  );
-  if (stale.size === 0) {
-    writeMap(root, entries);
-    return 0;
-  }
-  const count = deleteEntries(root, stale);
-  await syncIndex(root);
-  if (announce) {
-    process.stdout.write(`pruned ${count} stale entries\n`);
-  }
-  return count;
-}
-
-export async function chart(args: string[]) {
-  const { details, files, question } = parseChartArgs(args);
-  if (!question || files.length === 0) {
+  if (!(question && files.length)) {
     fail(`capn chart requires a question and --files. Use:\n  ${chartSyntax}`);
   }
-  if (question.includes("\n")) {
+  if (question.includes("\n") || question.includes("\r")) {
     fail("capn chart questions cannot contain newlines");
   }
-  const root = findProjectRoot(process.cwd());
-  const hashedFiles: Record<string, string> = {};
-  for (const file of files) {
-    const { absolute, relativePath } = relativeFile(root, file);
-    try {
-      if (!statSync(absolute).isFile()) {
-        throw new Error("not a regular file");
+  let hashes: Record<string, string>;
+  await inWorkspace(
+    { create: true },
+    async (context) => {
+      const id = identity(question, details, hashes);
+      const path = entryPath(context.root, id);
+      if (existsSync(path)) {
+        const existing = readEntries(context.root).find(
+          (entry) => entry.id === id
+        );
+        if (
+          !existing ||
+          existing.question !== question ||
+          existing.details !== details ||
+          JSON.stringify(Object.entries(existing.files).sort()) !==
+            JSON.stringify(Object.entries(hashes).sort())
+        ) {
+          fail(`Discovery identity collision: ${id}`);
+        }
+      } else {
+        writeEntry(context.root, {
+          id,
+          question,
+          details,
+          files: hashes,
+          at: new Date().toISOString(),
+        });
       }
-    } catch {
-      fail(`missing or not a regular file: ${file}`);
+      if (context.workspace.initialized) {
+        await reconcile(context);
+      } else {
+        process.stderr.write(
+          "capn storage updated; run capn init to enable QMD recall\n"
+        );
+      }
+      process.stdout.write(`charted ${id}\n`);
+    },
+    (context) => {
+      hashes = Object.create(null);
+      for (const file of files) {
+        const { absolute, logical } = logicalFile(context, file);
+        if (Object.hasOwn(hashes, logical)) {
+          continue;
+        }
+        try {
+          if (!statSync(absolute).isFile()) {
+            throw new Error("not a file");
+          }
+          hashes[logical] = sha256(readFileSync(absolute));
+        } catch {
+          fail(`missing or not a regular file: ${file}`);
+        }
+      }
     }
-    hashedFiles[relativePath] = sha256(readFileSync(absolute));
-  }
-  ensureCapn(root);
-  const id = sha256(question).slice(0, 8);
-  if (existsSync(entryPath(root, id))) {
-    rmSync(entryPath(root, id));
-  }
-  writeEntry(root, {
-    id,
-    question,
-    details,
-    files: hashedFiles,
-    at: new Date().toISOString(),
-  });
-  writeMap(root);
-  await syncIndex(root, config(root).embedding, true);
-  process.stdout.write(`charted ${id}\n`);
+  );
 }
 
-function miss(question: string) {
-  process.stderr.write(noChartedAnswer(question));
-  process.exitCode = 1;
+function sameSelection(left: Entry[], right: Entry[]) {
+  return (
+    left.length === right.length &&
+    left.every((entry, index) => entry.id === right[index]?.id)
+  );
 }
 
-export async function ask(args: string[]) {
-  const question = args[0];
-  if (!question) {
-    fail("capn ask requires a question");
-  }
-  const root = findProjectRoot(process.cwd());
-  await prune(root, false);
-  if (!existsSync(qmdDBPath(root))) {
-    fail("capn recall is not initialized. Run capn init.\n");
-  }
-  const entries = new Map(readEntries(root).map((entry) => [entry.id, entry]));
-  const store = await openStore(root);
+async function searchGeneration(
+  context: Context,
+  generation: string,
+  question: string
+) {
+  const store = await openStore(generation);
   try {
-    const hits = await (config(root).embedding
+    return await (context.workspace.embedding
       ? store.search({ query: question, collection: "capn", limit: 5 })
       : store.searchLex(question, { collection: "capn", limit: 5 }));
-    const found = hits
-      .map((hit) => {
-        const id = hitId(hit);
-        return { entry: entries.get(id), score: Number(hit.score ?? 0) };
-      })
-      .filter((hit): hit is { entry: Entry; score: number } =>
-        Boolean(hit.entry)
-      );
-    if (found.length === 0) {
-      miss(question);
-      return;
-    }
-    for (const hit of found) {
-      const score =
-        hit.score <= 1 ? Math.round(hit.score * 100) : Math.round(hit.score);
-      const details = hit.entry.details.trimEnd();
-      const row: {
-        id: string;
-        question: string;
-        files: string[];
-        details?: string;
-        score: number;
-      } = {
-        id: hit.entry.id,
-        question: hit.entry.question,
-        files: Object.keys(hit.entry.files).sort(),
-        score,
-      };
-      if (details) {
-        row.details = details;
-      }
-      process.stdout.write(`${JSON.stringify(row)}\n`);
-    }
   } finally {
     await store.close();
   }
 }
 
+function outputHits(
+  context: Context,
+  selection: ReturnType<typeof applicable>,
+  hits: Awaited<ReturnType<typeof searchGeneration>>,
+  question: string
+) {
+  const entries = new Map(selection.entries.map((entry) => [entry.id, entry]));
+  const found = hits.flatMap((hit) => {
+    const entry = entries.get(hitId(hit));
+    return entry ? [{ entry, score: Number(hit.score ?? 0) }] : [];
+  });
+  if (!found.length) {
+    miss(question);
+    return;
+  }
+  for (const { entry, score } of found) {
+    const files = Object.keys(entry.files)
+      .map((path) => {
+        const absolute = selection.paths.get(path);
+        if (!absolute) {
+          fail(
+            "Backing files changed during recall; retry when the files are stable."
+          );
+        }
+        return absolute;
+      })
+      .sort();
+    process.stdout.write(
+      `${JSON.stringify({
+        id: entry.id,
+        workspace: context.name,
+        question: entry.question,
+        files,
+        ...(entry.details.trimEnd()
+          ? { details: entry.details.trimEnd() }
+          : {}),
+        score: score <= 1 ? Math.round(score * 100) : Math.round(score),
+      })}\n`
+    );
+  }
+}
+
+async function recall(context: Context, question: string) {
+  if (!context.workspace.initialized) {
+    fail("capn recall is not initialized. Run capn init.");
+  }
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const selection = applicable(context);
+    const generation = await reconcile(context, selection);
+    let hits: Awaited<ReturnType<typeof searchGeneration>>;
+    try {
+      hits = await searchGeneration(context, generation, question);
+    } catch (error) {
+      discardGeneration(generation);
+      if (attempt === 0) {
+        continue;
+      }
+      throw error;
+    }
+    const verified = applicable(context);
+    if (!sameSelection(selection.entries, verified.entries)) {
+      if (attempt === 0) {
+        continue;
+      }
+      fail(
+        "Backing files changed during recall; retry when the files are stable."
+      );
+    }
+    outputHits(context, verified, hits, question);
+    return;
+  }
+}
+
+export async function ask(args: string[]) {
+  const question = args[0];
+  if (!question || args.length !== 1) {
+    fail("capn ask requires a question");
+  }
+  await inWorkspace({}, (context) => recall(context, question));
+}
+
 export async function bust(args: string[]) {
   const file = args[0];
-  if (!file) {
+  if (!file || args.length !== 1) {
     fail("capn bust requires a path");
   }
-  const root = findProjectRoot(process.cwd());
-  readMap(root);
-  const { relativePath } = relativeFile(root, file);
-  const ids = new Set(
-    readEntries(root)
-      .filter((entry) => relativePath in entry.files)
-      .map((entry) => entry.id)
-  );
-  const count = deleteEntries(root, ids);
-  if (count > 0) {
-    await syncIndex(root);
-  }
-  process.stdout.write(`busted ${count} entries\n`);
+  await inWorkspace({}, async (context) => {
+    const { logical } = logicalFile(context, file);
+    const ids = new Set(
+      applicable(context)
+        .matching.filter((entry) => Object.hasOwn(entry.files, logical))
+        .map((entry) => entry.id)
+    );
+    const count = deleteEntries(context.root, ids);
+    if (context.workspace.initialized) {
+      await reconcile(context);
+    }
+    process.stdout.write(`busted ${count} entries\n`);
+  });
 }
 
 export async function deleteEntry(id: string) {
   if (!id) {
     fail("capn unchart requires an id");
   }
-  const root = findProjectRoot(process.cwd());
-  const path = entryPath(root, id);
-  if (!existsSync(path)) {
-    fail(`unknown id: ${id}`);
+  if (!entryIdPattern.test(id)) {
+    fail(`invalid id: ${id}`);
   }
-  rmSync(path);
-  writeMap(root);
-  await syncIndex(root);
+  await inWorkspace({}, async (context) => {
+    if (!deleteEntries(context.root, new Set([id]))) {
+      fail(`unknown id: ${id}`);
+    }
+    if (context.workspace.initialized) {
+      await reconcile(context);
+    }
+  });
+}
+
+export async function prune() {
+  await inWorkspace({}, async (context) => {
+    const selection = applicable(context);
+    if (context.workspace.initialized) {
+      await reconcile(context, selection);
+    }
+    const count = await cleanupBindings(context);
+    process.stdout.write(
+      `reconciled ${selection.entries.length} applicable entries; removed ${count} checkout bindings\n`
+    );
+  });
 }
 
 function formatEntry(entry: Entry) {
@@ -230,22 +296,65 @@ function formatEntry(entry: Entry) {
     .map((path) => `  - ${path}`)
     .join("\n");
   const details = entry.details.trimEnd();
-  return `${entry.id}
-Q: ${entry.question}
-Files:
-${files}
-${details ? `Details:\n${details}\n` : ""}
-`;
+  return `${entry.id}\nQ: ${entry.question}\nFiles:\n${files}\n${details ? `Details:\n${details}\n` : ""}\n`;
+}
+export async function listEntries() {
+  await inWorkspace({}, (context) => {
+    process.stdout.write(readEntries(context.root).map(formatEntry).join("\n"));
+  });
 }
 
-export function listEntries() {
-  const root = findProjectRoot(process.cwd());
-  process.stdout.write(readEntries(root).map(formatEntry).join("\n"));
+export async function init(args: string[]) {
+  const { positionals, values } = parseArgs({
+    args,
+    allowPositionals: true,
+    options: {
+      workspace: { type: "string" },
+      repo: { type: "string" },
+      embedding: { type: "boolean" },
+      "no-embedding": { type: "boolean" },
+      git: { type: "boolean" },
+      help: { type: "boolean" },
+      h: { type: "boolean" },
+    },
+  });
+  if (values.help || values.h) {
+    process.stdout.write(
+      "capn init [--workspace <name>] [--repo <alias>] [--git] [--embedding|--no-embedding]\n"
+    );
+    return;
+  }
+  if (positionals.length || (values.embedding && values["no-embedding"])) {
+    fail("Invalid capn init options");
+  }
+  if (values.git && !checkout(process.cwd()).commonDir) {
+    fail("capn init --git requires a Git checkout");
+  }
+  const embedding = values.embedding ? true : undefined;
+  await inWorkspace(
+    {
+      create: true,
+      workspace: values.workspace,
+      repo: values.repo,
+      embedding: values["no-embedding"] ? false : embedding,
+      initialize: true,
+    },
+    async (context) => {
+      await reconcile(context);
+      installClaudeHooks(context.binding.root);
+      installCodexHooks(context.binding.root);
+      if (values.git) {
+        installPostCommit(context.binding.root);
+      }
+      process.stdout.write(
+        `capn initialized: workspace ${context.name}, repository ${context.binding.alias}, storage, qmd capn collection, hooks${values.git ? ", post-commit" : ""}\n`
+      );
+    }
+  );
 }
-
 export function context() {
   process.stdout.write(`<capn-hook>
-This project keeps a chart of past discoveries: questions earlier sessions answered, and the files in this repo backing each answer.
+This workspace keeps a central chart of past discoveries: questions earlier sessions answered, and the files in its related repositories backing each answer.
 
 About to search the codebase — where something lives, how a flow works, which file owns a behavior? Ask the capn first:
 
@@ -257,81 +366,7 @@ When you do discover a route the hard way (real exploration, more than a couple 
 
     capn chart "<question>" --files <comma-separated files backing it> [--details "<line numbers or gotchas>"]
 
-The files ARE the answer; --details is only for extras like line numbers or gotchas. Prefer several atomic charts over one big "context" chart when a discovery contains separable facts, but include multiple files when they jointly answer one focused question. Entries whose backing files change are deleted automatically, so when the capn answers, the answer is current. Re-chart a question to replace its entry; never edit entry files by hand.
+The files ARE the answer; --details is only for extras like line numbers or gotchas. Prefer several atomic charts over one big "context" chart when a discovery contains separable facts, but include multiple files when they jointly answer one focused question. Discoveries apply only while all backing files match this checkout and its companion repositories. Changed files hide a version without deleting it; charting changed evidence creates another immutable version, and reverting restores earlier answers. Never edit entry files by hand.
 </capn-hook>
 `);
-}
-
-function parseInitOptions(args: string[]): InitOptions {
-  const { values } = parseArgs({
-    args,
-    allowPositionals: true,
-    options: {
-      embedding: { type: "boolean" },
-      git: { type: "boolean" },
-      "no-embedding": { type: "boolean" },
-    },
-    strict: false,
-  });
-  let embedding: boolean | undefined;
-  if (values["no-embedding"] === true) {
-    embedding = false;
-  } else if (values.embedding === true) {
-    embedding = true;
-  }
-  return { embedding, git: values.git === true };
-}
-
-function writeConfig(root: string, options: InitOptions) {
-  const existing = existsSync(configPath(root))
-    ? config(root)
-    : { embedding: true };
-  const embedding = options.embedding ?? existing.embedding;
-  writeFileSync(
-    configPath(root),
-    `${JSON.stringify({ embedding }, null, 2)}\n`
-  );
-  return embedding;
-}
-
-export async function init(args: string[]) {
-  const options = parseInitOptions(args);
-  const root = findProjectRoot(process.cwd());
-  ensureCapn(root);
-  const embedding = writeConfig(root, options);
-  ensureGitignore(root);
-  const store = await openStore(root);
-  const capnContext =
-    "Charted discoveries: questions and where their answers live in this codebase";
-  try {
-    const contexts = await store.listContexts();
-    if (
-      !contexts.some(
-        (context) =>
-          context.collection === "capn" &&
-          context.path === "/" &&
-          context.context === capnContext
-      )
-    ) {
-      await store.addContext("capn", "/", capnContext);
-    }
-    installClaudeHooks(root);
-    installCodexHooks(root);
-    if (options.git) {
-      installPostCommit(root);
-    }
-    await store.update({});
-    if (embedding) {
-      process.stdout.write(
-        "embedding enabled; qmd may download its model on first run\n"
-      );
-      await store.embed({});
-    }
-  } finally {
-    await store.close();
-  }
-  writeMap(root);
-  process.stdout.write(
-    `capn initialized: storage, qmd capn collection, hooks${options.git ? ", post-commit" : ""}\n`
-  );
 }

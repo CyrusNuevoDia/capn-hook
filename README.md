@@ -2,23 +2,17 @@
 
 *Don't grep the same mystery twice.*
 
-Persistent memory for coding agents. When your agent spends ten minutes figuring out where something lives in your codebase, capn saves the files that answer the question. The next session gets them back in one command instead of re-exploring — and the moment the underlying files change, the saved answer deletes itself.
+Persistent memory for coding agents. When your agent spends ten minutes figuring out where something lives, capn saves the files that answer the question. Later sessions recall that discovery in one command, including across related repositories and Git worktrees. An answer appears only when every backing file still matches its saved content.
 
 ## 77% fewer tokens on repeat questions
 
-Across 60 real developer questions on 5 production codebases (Dub, Polar, PostHog, Twenty, Documenso), an agent recalling from capn used **77% fewer tokens** than an agent exploring cold — every answer correct in both arms, the right chart recalled on all 60 questions, and a charting session paying for itself in ~1.6 recalls.
+Historical runs across 60 developer questions on five production codebases measured **77% fewer tokens** for recall than cold exploration, with the relevant chart returned for all 60 questions. Those runs used a permissive filename scorer, so they don't establish complete answer coverage or semantic correctness; the stricter scorer hasn't been applied to that evidence.
 
 [How the eval was run, full numbers, and raw evidence →](eval/RESULTS.md) · [Who capn is for →](docs/audience.md) · [Use cases →](docs/use-cases.md)
 
-## The problem
-
-Coding agents forget everything between sessions. The route from "where are payment webhooks handled?" to "`src/api/webhooks.ts`, handlers in `src/billing/handlers/`" costs real time and tokens — and evaporates when the session ends. Tomorrow's session pays for the same discovery again.
-
 ## How it works
 
-`capn init` installs a session-start hook for Claude Code and Codex. Every new session, the agent sees one short note: **before searching the codebase, ask capn; after a hard-won discovery, save it.** That note (`capn context`) is the entire integration — no wrapper, no middleware, no forced behavior. The model reads it and decides.
-
-From there the loop is three moves:
+`capn init` installs a session-start hook for Claude Code and Codex. Every session, the agent sees a short note: **before searching the codebase, ask capn; after a discovery that took substantial exploration, chart it.** The note (`capn context`) is the integration; the agent decides when to call the CLI.
 
 **1. Ask before searching.**
 
@@ -26,9 +20,9 @@ From there the loop is three moves:
 capn ask "where are payment webhooks handled?"
 ```
 
-A hit returns JSONL with the exact files that answer the question, skipping the whole search. A miss exits 1 with a nudge on stderr to explore and chart what it finds — a miss costs seconds; re-exploring costs minutes.
+A hit returns ranked JSONL with absolute paths to the files that answer the question and the workspace name. A miss exits 1 with a hint on stderr to explore and chart the result.
 
-**2. Save what was expensive to learn.** When the agent works out an answer the hard way, it records a small, answerable question and the files that answer it, with optional details for extras like line numbers or gotchas:
+**2. Save what was expensive to learn.**
 
 ```sh
 capn chart "where are payment webhooks handled?" \
@@ -36,13 +30,11 @@ capn chart "where are payment webhooks handled?" \
   --details "Router starts near line 40; Stripe handler owns signature checks."
 ```
 
-Each backing file is fingerprinted (sha256) at save time.
+The files are the answer; optional details add line numbers or constraints. Split separable discoveries into separate questions, and cite several files when they jointly answer one question. Capn hashes each complete backing file when you chart it.
 
-Good charts are atomic, not giant context dumps. Split separable facts into separate charts, but include multiple files when they jointly answer one focused question.
+**3. Recall the version that matches your checkout.**
 
-**3. Stale answers delete themselves.** If any backing file changes or disappears, the entry is removed before it can ever answer again. Saved answers are never edited — an answer is either still true (its files haven't changed) or it's worthless. That's why the commands are `chart` and `unchart`, not `add` and `update`: capn treats your codebase like a coastline. The agent charts what it has explored; when the coastline shifts, the old chart gets thrown out and the agent re-charts on the next encounter.
-
-Worst case, an entry is deleted and the agent re-explores — which is exactly what it would have done without capn.
+If a backing file changes or disappears, capn hides that discovery from the checkout's results. The record stays available: reverting the file restores the answer, and another worktree with matching content can still recall it. Charting changed evidence creates an immutable version; charting identical evidence and details reuses the same version. When several versions of the same exact question apply, the newest wins, with the version ID breaking timestamp ties.
 
 ## Install
 
@@ -52,76 +44,71 @@ npm install -g capn-hook
 bun install -g capn-hook
 
 cd /path/to/your/project
-capn init            # .capn/, capn's QMD index, Claude Code hooks, and Codex hooks
-capn init --git      # also install a post-commit hook that prunes
+capn init
+capn init --git      # also install a post-commit hook that runs capn prune
 ```
 
-The published CLI ships as JavaScript and runs under Bun when Bun is available, falling back to Node.js.
+The published CLI runs under Bun when available, falling back to Node.js. To delegate installation, give your coding agent [INSTALL.md](https://github.com/CyrusNuevoDia/capn-hook/blob/main/INSTALL.md).
 
-Prefer to delegate? Tell your coding agent to fetch and follow [INSTALL.md](https://github.com/CyrusNuevoDia/capn-hook/blob/main/INSTALL.md) — it's written for the agent to execute, not for you to copy by hand.
+Memory lives under `~/.capn/`; agent hooks stay in the checkout:
 
-| Agent       | File                    | Hook         | Command                     | Effect                                 |
-| ----------- | ----------------------- | ------------ | --------------------------- | -------------------------------------- |
-| Claude Code | `.claude/settings.json` | SessionStart | `/usr/bin/env capn context` | Inject the ask-first charting contract |
-| Codex       | `.codex/hooks.json`     | SessionStart | `/usr/bin/env capn context` | Inject the ask-first charting contract |
+| Agent | File | Hook | Command |
+| --- | --- | --- | --- |
+| Claude Code | `.claude/settings.json` | SessionStart | `/usr/bin/env capn context` |
+| Codex | `.codex/hooks.json` | SessionStart | `/usr/bin/env capn context` |
 
-Recall runs on [QMD](https://github.com/tobi/qmd): semantic (hybrid) search by default, plain keyword (BM25) search with `capn init --no-embedding`. The default path downloads embedding models on first use (about 300MB up front, up to ~2GB for the full hybrid pipeline) and a cold `capn ask` can take a few seconds once they're present; the BM25 path downloads nothing and is fully deterministic.
+Recall uses [QMD](https://github.com/tobi/qmd) hybrid search by default. `capn init --no-embedding` selects keyword (BM25) search with no model download. Hybrid search downloads models on first use and shares the model cache across workspaces; separate index generations have separate embeddings. Passing an embedding flag changes the workspace policy; omitting both flags preserves an existing policy.
 
-Already use qmd yourself? capn's index is its own sqlite under `.capn/` — your collections never see it, and it never sees yours.
+Capn's QMD databases are isolated from your own QMD collections and project `.qmd/` directory. Existing project-local `.capn/` directories aren't read, changed, or imported.
+
+## Related repositories and worktrees
+
+Repositories can live anywhere on disk. Register each one with the same workspace name and its own alias:
+
+```sh
+cd /Volumes/Code/shop-web
+capn init --workspace shop --repo web --no-embedding
+cd /Users/me/Git/shop-api
+capn init --workspace shop --repo api
+```
+
+From the web checkout, chart a discovery that spans both repositories using ordinary paths:
+
+```sh
+capn chart "where does checkout create an order?" \
+  --files src/checkout.ts,/Users/me/Git/shop-api/src/orders.ts
+```
+
+Each checkout has one workspace owner. Without naming a workspace, `capn init` creates an isolated workspace or reuses the checkout's existing registration. Git worktrees inherit an unambiguous owner through their repository's common Git directory; branch names and remotes don't establish ownership.
+
+For each command, capn uses the invoking checkout for its repository and the initial registered checkout for each companion repository. This makes a web worktree's context explicit: its own web files plus the default API files. Paths outside those selected roots, symlink escapes, and files in unrelated nested Git repositories are rejected. If a companion checkout is unavailable, discoveries depending on it can't answer.
+
+See [Central workspaces](docs/workspaces.md) for storage, version selection, and cleanup details.
 
 ## Commands
 
-| Command                                            | Description                                                                   |
-| -------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `capn init [--git] [--embedding\|--no-embedding]`  | Set up `.capn/`, capn's QMD index, hooks, and the `.capn/` gitignore line     |
-| `capn context`                                     | Print the ask-first charting contract (used by the SessionStart hook)         |
-| `capn ask "<question>"`                            | Print JSONL hits for relevant charted answers after pruning stale entries first |
-| `capn chart "<question>" --files <a,b> [--details "<extra context>"]` | Record a discovery, hashing each backing file                     |
-| `capn unchart <id>`                                | Manually delete one chart entry                                               |
-| `capn bust <path>`                                 | Delete every chart entry backed by one file                                   |
-| `capn prune`                                       | Delete every chart entry whose files changed or vanished                      |
-| `capn list`                                        | Print charted entries, human-readable                                         |
+| Command | Description |
+| --- | --- |
+| `capn init [--workspace <name>] [--repo <alias>] [--git] [--embedding\|--no-embedding]` | Register the checkout, prepare recall, and install agent hooks |
+| `capn context` | Print the ask-first charting instructions |
+| `capn ask "<question>"` | Print up to five ranked JSONL hits from the applicable version set |
+| `capn chart "<question>" --files <a,b> [--details "<extra context>"]` | Save an immutable discovery backed by full-file hashes |
+| `capn unchart <versionId>` | Forget that exact version across the workspace |
+| `capn bust <path>` | Forget applicable versions citing that file |
+| `capn prune` | Reconcile the checkout view and clean confirmed dead bindings and unused indexes; retain discoveries |
+| `capn list` | Print the workspace's full discovery inventory, including hidden versions |
 
-## The chart
+`chart` accepts relative or absolute filesystem paths. `list` includes every version so you can find IDs for `unchart`, even when a version doesn't match your checkout. `chart` also works before `init`: it saves central Markdown and prints an initialization hint; `init` enables recall and hooks. Other commands require an existing workspace registration and never claim an unregistered checkout, so a first unsuccessful ask leaves you free to choose a workspace with `init`.
 
-`.capn/entries/<id>.md` — one local markdown file per question. Entries are plain text you can open and read; the chart is browsable by humans, not just tools. `capn init` gitignores `.capn/`, so this memory stays local to the working copy.
+## Storage and safety
 
-```md
----
-capn: 1
-id: 9f3a1c2e
-at: 2026-07-03T18:00:00.000Z
-files:
-  src/api/webhooks.ts: 2f4c0b9c3e0a0c7b5d5d7f8f0a6e2d1c4b8a6f1e2d3c4b5a6978877665544332
----
+`~/.capn/config.json` owns workspace settings, repository aliases, default checkouts, and checkout bindings. Discovery Markdown lives in `~/.capn/workspaces/<workspace>/entries/<versionId>.md`. References inside records are logical paths such as `web/src/checkout.ts`, so a record doesn't depend on a particular absolute checkout location.
 
-# Where are payment webhooks handled?
+A version ID is the first 16 lowercase hexadecimal characters of a SHA-256 content identity: the exact question, details, and sorted logical file paths with their full hashes. Timestamps don't affect identity. Entries are immutable; `unchart` forgets a version rather than editing it.
 
-Router starts near line 40; Stripe handler owns signature checks.
-```
+Before searching, capn selects versions whose complete backing files match and keeps one winner per exact question. QMD indexes only that selected set in an isolated generation under `views/<fingerprint>/`. A generation becomes ready only after indexing succeeds; interrupted builds are retried rather than serving an older selection. Markdown remains authoritative, and derived indexes can be rebuilt.
 
-`.capn/map.json` — a derived reverse index from file path to current hash and entry ids. If it is missing or corrupt, capn rebuilds it from entry frontmatter.
-
-```json
-{
-  "src/api/webhooks.ts": {
-    "hash": "2f4c0b9c3e0a0c7b5d5d7f8f0a6e2d1c4b8a6f1e2d3c4b5a6978877665544332",
-    "entries": ["9f3a1c2e"]
-  }
-}
-```
-
-`.capn/config.json` stores local project options such as `{"embedding": true}`. `.capn/qmd/index.sqlite` is generated by the QMD SDK, with normal sqlite `-wal`/`-shm` siblings beside it; the markdown under `.capn/entries/` remains the durable source of truth, and `capn init` can rebuild the index.
-
-The whole `.capn/` directory is local agent memory and is gitignored by `capn init`. Chart entries are episodic memory about the codebase: local, disposable, and safe to rebuild by re-exploring.
-
-## Design principles
-
-- **Chart or unchart, never update.** Staleness is decided by content hashes, not judgment calls.
-- **Answers are never stale.** `capn ask` removes invalid entries before returning anything.
-- **The chart is disposable.** Any entry can be deleted at any time; the worst case is the agent re-explores, which is exactly the status quo.
-- **Agent-agnostic core.** The CLI and chart format know nothing about Claude Code; the hooks are a thin adapter. Other agents integrate by calling the same CLI.
-- **Local-first recall.** QMD runs in-process through the SDK against `.capn/qmd/index.sqlite`, isolated from any host qmd install. No daemon, no server — nothing to keep running.
+Commands serialize within a workspace through a process lock. Cleanup removes a missing Git checkout binding only when an accessible Git worktree registry confirms its removal. Missing paths alone, unavailable Git metadata, and locked worktrees don't establish deletion. Cleanup retains discoveries and keeps indexes referenced by surviving bindings; no daemon or filesystem sweep is involved.
 
 ## License
 
