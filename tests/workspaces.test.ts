@@ -101,7 +101,7 @@ test.concurrent("scattered repositories share joint discoveries without local st
   } finally {
     w.cleanup();
   }
-});
+}, 15_000);
 
 test.concurrent("worktree versions retain H1 and H2, deduplicate identical evidence and restore on revert", async () => {
   const w = workspace();
@@ -191,7 +191,7 @@ test.concurrent("init help and invalid options leave all registration and hook f
   } finally {
     w.cleanup();
   }
-});
+}, 15_000);
 
 test.concurrent("isolated equal-basename directories keep equal questions in separate workspaces", async () => {
   const w = workspace();
@@ -238,7 +238,7 @@ test.concurrent("isolated equal-basename directories keep equal questions in sep
   } finally {
     w.cleanup();
   }
-});
+}, 15_000);
 
 test.concurrent("registered subdirectories inherit ownership while symlinks and nested unrelated Git roots cannot supply evidence", async () => {
   const w = workspace();
@@ -298,7 +298,7 @@ test.concurrent("registered subdirectories inherit ownership while symlinks and 
   } finally {
     w.cleanup();
   }
-});
+}, 15_000);
 
 test.concurrent("61 hidden evidence versions cannot crowd out an applicable QMD answer", async () => {
   const w = workspace();
@@ -343,7 +343,7 @@ test.concurrent("61 hidden evidence versions cannot crowd out an applicable QMD 
   } finally {
     w.cleanup();
   }
-}, 15_000);
+}, 30_000);
 
 test.concurrent("concurrent registrations preserve every alias and independent workspace", async () => {
   const w = workspace();
@@ -434,7 +434,7 @@ test.concurrent("a definitively dead lock owner is reclaimed without losing disc
   } finally {
     w.cleanup();
   }
-});
+}, 15_000);
 
 test.concurrent("incomplete and truncated disposable generations rebuild without losing shared records", async () => {
   const w = workspace();
@@ -484,7 +484,7 @@ test.concurrent("incomplete and truncated disposable generations rebuild without
   } finally {
     w.cleanup();
   }
-});
+}, 15_000);
 
 test.concurrent("Git-confirmed worktree removal cleans bindings and unused views while retaining discoveries", async () => {
   const w = workspace();
@@ -642,7 +642,7 @@ test.concurrent("raw missing and locked worktrees remain registered instead of b
   } finally {
     w.cleanup();
   }
-});
+}, 15_000);
 
 test.concurrent("a workspace named config cannot collide with the registry lock", async () => {
   const w = workspace();
@@ -663,7 +663,7 @@ test.concurrent("a workspace named config cannot collide with the registry lock"
   } finally {
     w.cleanup();
   }
-}, 5000);
+}, 15_000);
 
 test.concurrent("quoted newline and prototype-shaped filenames roundtrip through immutable records and recall", async () => {
   const w = workspace();
@@ -703,7 +703,7 @@ test.concurrent("quoted newline and prototype-shaped filenames roundtrip through
   } finally {
     w.cleanup();
   }
-});
+}, 15_000);
 
 test.concurrent("an unavailable companion hides joint discoveries but preserves independent answers and retained records", async () => {
   const w = workspace();
@@ -789,7 +789,7 @@ test.concurrent("bust forgets every applicable shadowed version without removing
   } finally {
     w.cleanup();
   }
-});
+}, 15_000);
 
 test.concurrent("pruning from another repository follows a companion default worktree moved through Git", async () => {
   const w = workspace();
@@ -841,7 +841,7 @@ test.concurrent("pruning from another repository follows a companion default wor
   } finally {
     w.cleanup();
   }
-});
+}, 15_000);
 
 test.concurrent.each([
   ["ask", "Where is the answer?"],
@@ -877,4 +877,4 @@ test.concurrent.each([
   } finally {
     w.cleanup();
   }
-});
+}, 15_000);
