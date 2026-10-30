@@ -2,9 +2,11 @@
 
 import { existsSync } from "node:fs";
 import { appendFile, mkdir, readFile, rm, symlink } from "node:fs/promises";
+import { homedir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
+import { gradeAnswer } from "./grading.ts";
 
 type BunSpawnOptions = {
   cwd: string;
@@ -100,6 +102,8 @@ const evalDir = scriptDir;
 const runsDir = join(evalDir, "runs");
 const workDir = join(runsDir, "work");
 const capnBinDir = join(runsDir, ".capnbin");
+const evalHome = join(workDir, ".home");
+const baselineHome = join(workDir, ".baseline-home");
 const jsonLinePattern = /\r?\n/;
 const codexModel = "gpt-5.5";
 const reasoningEffort = "low";
@@ -293,6 +297,8 @@ const cleanEnv = (): Record<string, string> => {
 
 const makeEnv = (PATHPrefix: string | null): Record<string, string> => {
   const env = cleanEnv();
+  env.CODEX_HOME ??= join(homedir(), ".codex");
+  env.HOME = PATHPrefix === null ? baselineHome : evalHome;
   if (PATHPrefix !== null) {
     const existingPATH = env.PATH ?? "";
     env.PATH = `${PATHPrefix}:${existingPATH}`;
@@ -373,10 +379,21 @@ const readEmbeddingMode = async (
   capnWorktree: string
 ): Promise<boolean | null> => {
   try {
-    const config = await readJSON(join(capnWorktree, ".capn", "config.json"));
-    return isRecord(config) && typeof config.embedding === "boolean"
-      ? config.embedding
-      : null;
+    const config = await readJSON(join(evalHome, ".capn", "config.json"));
+    if (!isRecord(config) || !isRecord(config.workspaces)) {
+      return null;
+    }
+    for (const workspace of Object.values(config.workspaces)) {
+      if (!isRecord(workspace) || !Array.isArray(workspace.bindings)) {
+        continue;
+      }
+      if (workspace.bindings.some(
+        (binding) => isRecord(binding) && binding.root === capnWorktree
+      )) {
+        return typeof workspace.embedding === "boolean" ? workspace.embedding : null;
+      }
+    }
+    return null;
   } catch {
     return null;
   }
@@ -493,19 +510,15 @@ const removeWorktree = async (
 };
 
 const ensureCapnInitialized = async (capnWorktree: string): Promise<void> => {
-  // Pre-create .capn so capn's findProjectRoot resolves to this worktree instead
-  // of walking up into an ancestor .capn — the eval worktrees live inside the
-  // capn-hook repo, which has its own .capn at the repo root.
-  await mkdir(join(capnWorktree, ".capn"), { recursive: true });
-  if (!existsSync(join(capnWorktree, ".capn", "config.json"))) {
-    writeProgress(`initializing capn in ${relative(repoRoot, capnWorktree)}`);
-    const result = await runCommand(["capn", "init"], {
-      cwd: capnWorktree,
-      env: makeEnv(capnBinDir),
-    });
-    if (result.exitCode !== 0) {
-      die(`capn init failed in ${capnWorktree}:\n${result.stderr}`);
-    }
+  // The harness owns one persistent HOME; central workspaces isolate each Git repository.
+  await mkdir(evalHome, { recursive: true });
+  writeProgress(`initializing capn in ${relative(repoRoot, capnWorktree)}`);
+  const result = await runCommand(["capn", "init"], {
+    cwd: capnWorktree,
+    env: makeEnv(capnBinDir),
+  });
+  if (result.exitCode !== 0) {
+    die(`capn init failed in ${capnWorktree}:\n${result.stderr}`);
   }
 
   await rm(join(capnWorktree, ".codex", "hooks.json"), { force: true });
@@ -622,30 +635,6 @@ const fileTail = (filePath: string): string => {
     return filePath;
   }
   return `${parts.at(-2)}/${parts.at(-1)}`;
-};
-
-const includesText = (haystack: string, needle: string): boolean =>
-  haystack.toLowerCase().includes(needle.toLowerCase());
-
-const gradeAnswer = (
-  answerText: string,
-  groundTruthFiles: string[]
-): { ambiguous: boolean; correct: boolean } => {
-  let basenameOnlyMatch = false;
-
-  for (const groundTruthFile of groundTruthFiles) {
-    if (
-      includesText(answerText, groundTruthFile) ||
-      includesText(answerText, fileTail(groundTruthFile))
-    ) {
-      return { ambiguous: false, correct: true };
-    }
-    if (includesText(answerText, fileBasename(groundTruthFile))) {
-      basenameOnlyMatch = true;
-    }
-  }
-
-  return { ambiguous: basenameOnlyMatch, correct: basenameOnlyMatch };
 };
 
 const filesOverlap = (
@@ -797,6 +786,7 @@ const runCodexCase = async (params: {
   await Bun.write(promptFile, prompt);
   const env =
     params.condition === "baseline" ? makeEnv(null) : makeEnv(capnBinDir);
+  await mkdir(env.HOME ?? baselineHome, { recursive: true });
   const cmd = [
     "codex",
     "exec",
@@ -854,6 +844,8 @@ const runCodexCase = async (params: {
     chartHitTopRank: chartHitMetrics === null ? null : chartHitMetrics.topRank,
     condition: params.condition,
     correct: grade.correct,
+    coverage: grade.coverage,
+    scoring: grade.scoring,
     flag: buildFlag(result.exitCode, parsed.sawTurnCompleted),
     sessionId: parsed.sessionId,
     tokens: parsed.tokens,
