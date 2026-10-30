@@ -1,6 +1,6 @@
 # Eval: what does capn actually save?
 
-**TL;DR: across 60 real developer questions on 5 production open-source codebases, an agent recalling from capn used 77% fewer tokens than an agent exploring cold — with every answer correct in both arms, and the relevant chart recalled on all 60 questions.**
+Across 60 developer questions on five production open-source codebases, historical runs measured 77.5% fewer tokens for recall than cold exploration. Their answer pass rates used a permissive filename check; they do not establish complete required-file coverage or semantic correctness.
 
 | | |
 | --- | --- |
@@ -9,7 +9,7 @@
 | Runs | 180 (baseline / chart / recall × 60) |
 | Agent | `codex exec`, GPT-5.5, `reasoning_effort=low` |
 | Token savings (recall vs baseline) | **77.5%** weighted, 76.7% unweighted across repos |
-| Answer correctness | 60/60 baseline, 60/60 recall |
+| Historical filename pass rate | 60/60 baseline, 60/60 recall |
 | Chart recall | 60/60 (right chart returned by `capn ask`) |
 | Break-even | a charting session pays for itself in ~1.6 recalls |
 
@@ -46,7 +46,7 @@ Mean total tokens per question:
 | Documenso | 191,319 | 47,813 | **75.0%** | 1.5 recalls |
 | **All** | | | **77.5%** | **1.6 recalls** |
 
-Savings weren't purchased with wrong answers: **all 180 runs produced a correct answer** (the agent's answer names the ground-truth files). The recall agent isn't skipping the question — it's skipping the search.
+All 180 runs passed the historical mechanical scorer, which accepted a case-insensitive substring match for any one ground-truth path, its final two path components, or its basename. A multi-file question could pass while omitting required files, and a basename collision could pass without identifying the intended file. These pass rates do not establish complete coverage, and the saved answers have not been rescored under the stricter contract.
 
 **Break-even** counts the charting overhead honestly: the chart arm costs more than baseline (the agent explores *and* writes charts). Dividing that full setup cost by the per-recall savings, a chart pays for itself in ~1.6 recalls of the same territory — everything after that is profit.
 
@@ -57,7 +57,7 @@ Savings weren't purchased with wrong answers: **all 180 runs produced a correct 
 Read the result for what it is:
 
 - **It measures repeat discovery, not transfer.** The recall arm asks the *identical* question that was charted. That's the scenario capn is built for — sessions re-paying for the same discovery — and this eval measures that ceiling deliberately. It does not measure how well charts generalize to related-but-different questions.
-- **Grading is mechanical, not judged.** An answer counts as correct when it cites ground-truth file paths (full path or `dir/basename`). No LLM judge, no vibes — but also no credit for partially-right prose, and no penalty for extra wrong files alongside a right one.
+- **Historical grading accepted any one filename match.** The pass rates above use the permissive scorer described above, including basename-only matches. The harness now requires every listed file's complete repo-relative path and records partial coverage separately as `required-files-v1`; that change does not rewrite this evidence. Neither scorer judges prose or penalizes extra wrong files alongside required ones.
 - **One agent, one model.** All runs used Codex (`codex exec`) with GPT-5.5 at low reasoning effort. Different agents and models will land on different absolute numbers.
 - **Questions were curated by the authors.** They're real subsystem questions (auth, billing, webhooks, sync, search — mostly rated hard), but they're questions we chose.
 
@@ -65,7 +65,7 @@ Design details that keep the comparison fair: the baseline worktree has no `capn
 
 ## Reproduce it
 
-The harness, corpus layout, and per-flag documentation live in [`README.md`](README.md). The short version:
+The harness, scoring contract, corpus layout, and per-flag documentation live in [`README.md`](README.md). Preserve the committed run directory before running the harness: it writes to the same evidence paths. New runs use `required-files-v1`, so their pass rates are not directly comparable to the historical rates above. Keep scoring versions separate; `summarize.ts` does not separate them. The commands are:
 
 ```sh
 bun eval/run.ts --repo dub            # run all three arms for one repo
