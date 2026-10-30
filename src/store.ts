@@ -1,20 +1,19 @@
-import { existsSync, mkdirSync } from "node:fs";
-import { basename } from "node:path";
-import { entriesDir, qmdDBPath, qmdDir } from "./project.ts";
-import { fail } from "./util.ts";
+import {
+  closeSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  readSync,
+  rmSync,
+} from "node:fs";
+import { basename, resolve } from "node:path";
+import { type Entry, writeEntry } from "./entries.ts";
+import { atomicWrite, fail, sha256 } from "./util.ts";
 
 export type SearchHit = { file?: string; filepath?: string; score?: number };
 export type CapnStore = {
-  addContext: (
-    collectionName: string,
-    pathPrefix: string,
-    contextText: string
-  ) => Promise<boolean>;
   close: () => Promise<void>;
   embed: (options?: Record<string, unknown>) => Promise<unknown>;
-  listContexts: () => Promise<
-    Array<{ collection: string; path: string; context: string }>
-  >;
   search: (options: {
     query: string;
     collection: string;
@@ -27,13 +26,15 @@ export type CapnStore = {
   update: (options?: Record<string, unknown>) => Promise<unknown>;
 };
 const markdownExtensionPattern = /\.md$/;
+const indexFormat = 1;
+const qmdVersion = "@tobilu/qmd@2.5.3";
 
 export function hitId(hit: SearchHit) {
   const file = hit.file || hit.filepath || "";
   return basename(file).replace(markdownExtensionPattern, "");
 }
 
-export async function openStore(root: string) {
+export async function openStore(generationRoot: string) {
   let createStore: (options: {
     dbPath: string;
     config: {
@@ -45,33 +46,97 @@ export async function openStore(root: string) {
   } catch {
     fail("qmd SDK not available. Run npm install or bun install.\n");
   }
-  mkdirSync(qmdDir(root), { recursive: true });
+  const qmdRoot = resolve(generationRoot, "qmd");
+  mkdirSync(qmdRoot, { recursive: true });
   return createStore({
-    dbPath: qmdDBPath(root),
+    dbPath: resolve(qmdRoot, "index.sqlite"),
     config: {
       collections: {
-        capn: { path: entriesDir(root), pattern: "**/*.md" },
+        capn: {
+          path: resolve(generationRoot, "entries"),
+          pattern: "**/*.md",
+        },
       },
     },
   });
 }
 
-export async function syncIndex(root: string, embed = false, warn = false) {
-  if (!existsSync(qmdDir(root))) {
-    if (warn) {
-      process.stderr.write(
-        "capn storage updated; run capn init to enable QMD recall\n"
-      );
-    }
-    return;
+function hasSQLiteHeader(path: string) {
+  const descriptor = openSync(path, "r");
+  try {
+    const header = Buffer.alloc(16);
+    return (
+      readSync(descriptor, header, 0, header.length, 0) === header.length &&
+      header.toString() === "SQLite format 3\0"
+    );
+  } finally {
+    closeSync(descriptor);
   }
+}
+
+function generationIsReady(
+  root: string,
+  fingerprint: string,
+  embedding: boolean
+) {
+  try {
+    const ready = JSON.parse(readFileSync(resolve(root, "ready.json"), "utf8"));
+    return (
+      ready.format === indexFormat &&
+      ready.fingerprint === fingerprint &&
+      ready.embedding === embedding &&
+      hasSQLiteHeader(resolve(root, "qmd", "index.sqlite"))
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function discardGeneration(root: string) {
+  // SQLite's WAL and SHM siblings belong to the same disposable generation.
+  rmSync(root, { recursive: true, force: true });
+}
+
+export async function prepareGeneration(
+  workspaceRoot: string,
+  entries: Entry[],
+  embedding: boolean
+) {
+  const fingerprint = sha256(
+    JSON.stringify([
+      indexFormat,
+      qmdVersion,
+      embedding,
+      entries.map((entry) => entry.id).sort(),
+    ])
+  );
+  const root = resolve(workspaceRoot, "views", fingerprint);
+  if (generationIsReady(root, fingerprint, embedding)) {
+    return root;
+  }
+
+  discardGeneration(root);
+  mkdirSync(resolve(root, "entries"), { recursive: true });
+  for (const entry of entries) {
+    writeEntry(root, entry);
+  }
+
+  // QMD persists the collection path, so build at its final location rather
+  // than renaming a temporary SQLite database into a different directory.
   const store = await openStore(root);
   try {
     await store.update({});
-    if (embed) {
+    if (embedding) {
       await store.embed({});
     }
   } finally {
     await store.close();
   }
+
+  // Publication is last: an interrupted build can never look reusable.
+  atomicWrite(
+    resolve(root, "ready.json"),
+    `${JSON.stringify({ format: indexFormat, fingerprint, embedding })}\n`
+  );
+  return root;
 }

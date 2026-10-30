@@ -1,89 +1,93 @@
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, relative, resolve, sep } from "node:path";
 import { execaSync } from "execa";
-import { fail } from "./util.ts";
 
-function toPOSIXPath(path: string) {
-  return path.split(sep).join("/");
+export type Checkout = { root: string; commonDir?: string; gitDir?: string };
+
+export function canonical(path: string): string {
+  const absolute = resolve(path);
+  if (existsSync(absolute)) {
+    return realpathSync(absolute);
+  }
+  return resolve(
+    canonical(dirname(absolute)),
+    absolute.slice(dirname(absolute).length + 1)
+  );
 }
 
-function findGitRoot(start: string) {
-  const git = execaSync("git", ["rev-parse", "--show-toplevel"], {
-    cwd: start,
-    env: { ...process.env, PWD: start },
+export function contains(root: string, path: string) {
+  const part = relative(root, path);
+  return (
+    part === "" ||
+    !(
+      part === ".." ||
+      part.startsWith(`..${sep}`) ||
+      resolve(root, part) !== path
+    )
+  );
+}
+
+export function git(args: string[], cwd: string) {
+  return execaSync("git", args, {
+    cwd,
+    env: { ...process.env, PWD: cwd },
     reject: false,
   });
-  if (git.exitCode === 0) {
-    return git.stdout.trim();
-  }
-  return resolve(start);
 }
 
-export function findProjectRoot(start: string) {
-  let current = resolve(start);
-  while (true) {
-    if (existsSync(resolve(current, ".capn"))) {
-      return current;
+export function checkout(start: string): Checkout {
+  const rootResult = git(["rev-parse", "--show-toplevel"], start);
+  if (rootResult.exitCode !== 0) {
+    // A broken worktree pointer must not silently become an unrelated directory.
+    let ancestor = canonical(start);
+    while (true) {
+      if (existsSync(resolve(ancestor, ".git"))) {
+        throw new Error(
+          "Cannot resolve Git checkout; repair its Git metadata before using capn."
+        );
+      }
+      const parent = dirname(ancestor);
+      if (parent === ancestor) {
+        break;
+      }
+      ancestor = parent;
     }
-    const parent = dirname(current);
-    if (parent === current) {
-      break;
-    }
-    current = parent;
+    return { root: canonical(start) };
   }
-  return findGitRoot(start);
+  const root = canonical(rootResult.stdout.trim());
+  const common = git(
+    ["rev-parse", "--path-format=absolute", "--git-common-dir"],
+    root
+  );
+  const directory = git(["rev-parse", "--absolute-git-dir"], root);
+  if (common.exitCode !== 0 || directory.exitCode !== 0) {
+    throw new Error(
+      "Cannot resolve Git checkout; repair its Git metadata before using capn."
+    );
+  }
+  return {
+    root,
+    commonDir: canonical(common.stdout.trim()),
+    gitDir: canonical(directory.stdout.trim()),
+  };
 }
 
-export function capnDir(root: string) {
-  return resolve(root, ".capn");
+export function capnDir() {
+  return resolve(homedir(), ".capn");
 }
-
+export function configPath() {
+  return resolve(capnDir(), "config.json");
+}
 export function entriesDir(root: string) {
-  return resolve(capnDir(root), "entries");
+  return resolve(root, "entries");
 }
-
-export function mapPath(root: string) {
-  return resolve(capnDir(root), "map.json");
-}
-
-export function configPath(root: string) {
-  return resolve(capnDir(root), "config.json");
-}
-
 export function entryPath(root: string, id: string) {
   return resolve(entriesDir(root), `${id}.md`);
 }
-
 export function qmdDir(root: string) {
-  return resolve(capnDir(root), "qmd");
+  return resolve(root, "qmd");
 }
-
 export function qmdDBPath(root: string) {
   return resolve(qmdDir(root), "index.sqlite");
-}
-
-export function ensureCapn(root: string) {
-  mkdirSync(entriesDir(root), { recursive: true });
-}
-
-export function relativeFile(root: string, file: string) {
-  const absolute = resolve(process.cwd(), file);
-  const relativePath = toPOSIXPath(relative(root, absolute));
-  if (
-    relativePath === "" ||
-    relativePath.startsWith("../") ||
-    relativePath === ".."
-  ) {
-    fail(`file is outside project root: ${file}`);
-  }
-  return { absolute, relativePath };
-}
-
-export function config(root: string) {
-  try {
-    const parsed = JSON.parse(readFileSync(configPath(root), "utf8"));
-    return { embedding: parsed.embedding !== false };
-  } catch {
-    return { embedding: true };
-  }
 }

@@ -1,77 +1,78 @@
 # Installing capn-hook (for agents)
 
-You are being asked to install capn-hook — dynamic memory for coding agents — into the project you're currently working in. Follow these steps yourself; don't just print them for the human.
+Install capn-hook and initialize the target checkout. Execute these steps yourself instead of printing instructions for the human.
 
-## 1. Check if capn is already installed
+## 1. Check for the CLI
 
 ```sh
 command -v capn
 ```
 
-If this prints a path, skip to step 4 — capn-hook is already installed on this machine, you just need to wire it into the current project.
+If a path is printed, skip to step 4.
 
 ## 2. Install the CLI
 
-Prefer the published npm package:
-
 ```sh
 npm install -g capn-hook
-```
-
-Or install it with Bun:
-
-```sh
+# or
 bun install -g capn-hook
 ```
 
-If npm does not have the needed version yet, use the source checkout:
+If the required version isn't published, use a source checkout:
 
 ```sh
 git clone https://github.com/CyrusNuevoDia/capn-hook ~/.local/share/capn-hook
 cd ~/.local/share/capn-hook
 ```
 
-If that clone location is already taken by a different checkout, or the human tells you capn-hook lives somewhere else on this machine, `cd` there instead of cloning.
+If that location already holds a checkout, or the human provides another location, use it instead of cloning.
 
-## 3. Build and link the CLI from source
+## 3. Build and link from source
+
+Skip this step if the package installation succeeded. With Bun installed, run:
 
 ```sh
 just install        # or: CAPN_BIN_DIR=/some/path-on-PATH just install
-```
-
-Requires [bun](https://bun.sh). Skip this source-link step if `npm install -g capn-hook` or `bun install -g capn-hook` worked. Do not use `bun link` — it does not put `capn` on PATH; `just install` creates the reliable source-checkout symlink.
-
-Confirm it worked:
-
-```sh
 command -v capn
 ```
 
-## 4. Initialize the target project
+`just install` builds the launcher target and symlinks the executable. Don't use `bun link`; it doesn't put `capn` on PATH.
 
-`cd` back to the project you're actually installing capn-hook into (not the capn-hook checkout), then:
+## 4. Initialize the target checkout
 
-```sh
-capn init            # sets up .capn/, capn's QMD index, Claude Code hooks, and Codex hooks
-capn init --git      # same, plus a post-commit hook that prunes stale entries
-```
-
-Use `capn init --git` if the target project is a git repo. Add `--no-embedding` to either form if you want deterministic BM25-only search and to skip the ~2GB one-time model download:
+Return to the checkout receiving the integration, then run:
 
 ```sh
-capn init --no-embedding
+capn init
 ```
 
-## 5. Verify
+For a Git repository, add `--git` to install a post-commit hook that runs `capn prune`. To use keyword search without model downloads, add `--no-embedding`:
+
+```sh
+capn init --git --no-embedding
+```
+
+If the human named related repositories and a shared workspace, register each checkout with that workspace and a distinct alias:
+
+```sh
+capn init --workspace shop --repo api --no-embedding
+```
+
+Otherwise, plain `init` creates an isolated workspace or reuses the checkout's registration. Git worktrees inherit the repository's unambiguous workspace owner. Explicit embedding flags change the shared workspace policy; omitted flags preserve it.
+
+## 5. Verify the integration
 
 ```sh
 capn context
 ```
 
-should print the ask-first charting contract. Also check that:
+Confirm that it prints the ask-first charting instructions, then check:
 
-- `.claude/settings.json` in the target project now has `SessionStart → /usr/bin/env capn context`
-- `.codex/hooks.json` in the target project now has `SessionStart → /usr/bin/env capn context`
-- `.capn/` exists in the target project and `.capn/` is gitignored
+- The checkout's `.claude/settings.json` has `SessionStart → /usr/bin/env capn context`.
+- The checkout's `.codex/hooks.json` has `SessionStart → /usr/bin/env capn context`.
+- `~/.capn/config.json` registers the checkout, and the workspace's central storage exists under `~/.capn/workspaces/`.
+- If `--git` was used, Git's configured post-commit hook includes `capn prune` and preserves existing hook content.
 
-capn-hook is now live in this project. See [README.md](README.md) for the full command reference (`capn init`, `capn context`, `capn ask`, `capn chart`, `capn unchart`, `capn bust`, `capn prune`, `capn list`).
+Memory is central; hooks are checkout-local. Don't create a project `.capn/` directory or change its gitignore for capn. Existing project `.capn/` directories aren't imported or consulted.
+
+See [README.md](README.md) for the command reference and [Central workspaces](docs/workspaces.md) for cross-repository recall and retention.
