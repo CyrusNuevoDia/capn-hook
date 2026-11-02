@@ -8,7 +8,7 @@ Install capn-hook and initialize the target checkout. Execute these steps yourse
 command -v capn
 ```
 
-If a path is printed, skip to step 4.
+If a path is printed, run `capn init --help`. If its usage lists `--workspace` and `--repo`, skip to step 4. Otherwise, upgrade the CLI in step 2 before configuring workspaces.
 
 ## 2. Install the CLI
 
