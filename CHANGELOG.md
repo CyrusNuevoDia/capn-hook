@@ -1,5 +1,11 @@
 # capn-hook
 
+## 0.3.1
+
+### Patch Changes
+
+- [#5](https://github.com/CyrusNuevoDia/capn-hook/pull/5) [`3f18541`](https://github.com/CyrusNuevoDia/capn-hook/commit/3f18541e3b637b24f52432ddfda7b2c803df5de4) Thanks [@CyrusNuevoDia](https://github.com/CyrusNuevoDia)! - Teach the session-start instructions to ask about all repositories in a workspace, use absolute paths from recall, and chart discoveries across repositories. Correct the workspace setup example and update installation and contributor guidance for central storage and retained discoveries.
+
 ## 0.3.0
 
 ### Minor Changes
