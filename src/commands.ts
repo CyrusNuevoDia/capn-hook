@@ -360,13 +360,13 @@ About to search the codebase — where something lives, how a flow works, which 
 
     capn ask "where are payment webhooks handled?"
 
-A hit hands you the files that answer it, skipping the whole search. A miss costs seconds; re-exploring costs minutes. Every answer is a set of files, so only ask what a file in this repo could answer — not live failures, external services, or anything you'd debug rather than locate.
+A hit returns ranked JSONL with absolute paths to the files that answer it, including files in companion repositories. Read those paths directly. Only ask questions that files in this workspace's repositories could answer — not live failures, external services, or anything you'd debug rather than locate.
 
 When you do discover a route the hard way (real exploration, more than a couple of tool calls), chart it for the next session as a small, answerable question:
 
     capn chart "<question>" --files <comma-separated files backing it> [--details "<line numbers or gotchas>"]
 
-The files ARE the answer; --details is only for extras like line numbers or gotchas. Prefer several atomic charts over one big "context" chart when a discovery contains separable facts, but include multiple files when they jointly answer one focused question. Discoveries apply only while all backing files match this checkout and its companion repositories. Changed files hide a version without deleting it; charting changed evidence creates another immutable version, and reverting restores earlier answers. Never edit entry files by hand.
+The files ARE the answer; --details is only for extras like line numbers or gotchas. Prefer several atomic charts over one big "context" chart when a discovery contains separable facts. For one focused question, include every backing file using relative or absolute filesystem paths, even when they span repositories. Discoveries apply only while all backing files match this checkout and its companion repositories. Changed files hide a version without deleting it; charting changed evidence creates another immutable version, and reverting restores earlier answers. Never edit entry files by hand.
 </capn-hook>
 `);
 }

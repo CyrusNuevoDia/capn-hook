@@ -75,6 +75,7 @@ capn init --workspace shop --repo api
 From the web checkout, chart a discovery that spans both repositories using ordinary paths:
 
 ```sh
+cd /Volumes/Code/shop-web
 capn chart "where does checkout create an order?" \
   --files src/checkout.ts,/Users/me/Git/shop-api/src/orders.ts
 ```
@@ -82,6 +83,8 @@ capn chart "where does checkout create an order?" \
 Each checkout has one workspace owner. Without naming a workspace, `capn init` creates an isolated workspace or reuses the checkout's existing registration. Git worktrees inherit an unambiguous owner through their repository's common Git directory; branch names and remotes don't establish ownership.
 
 For each command, capn uses the invoking checkout for its repository and the initial registered checkout for each companion repository. This makes a web worktree's context explicit: its own web files plus the default API files. Paths outside those selected roots, symlink escapes, and files in unrelated nested Git repositories are rejected. If a companion checkout is unavailable, discoveries depending on it can't answer.
+
+After removing a worktree with Git, run `capn prune` from a surviving checkout to remove its confirmed dead binding and unused indexes. The discoveries remain available to any checkout whose backing files match. Missing paths alone don't trigger cleanup, so an unavailable volume doesn't erase its registration.
 
 See [Central workspaces](docs/workspaces.md) for storage, version selection, and cleanup details.
 
